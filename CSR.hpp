@@ -162,7 +162,7 @@ public:
   bool useMemoryPool_() const;
 
   int getBandwidth() const;
-  double getAverageWidth(bool sorted = true) const;
+  double getAverageWidth(bool sorted = false) const;
   bool equals(const CSR& A, bool print = false) const;
   int getNnz() const { return rowptr[m] - getBase(); }
   int getBase() const { return rowptr[0]; }
