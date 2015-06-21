@@ -62,7 +62,8 @@ Utils.hpp/cpp: miscellaneous routines like comparing two vectors with
 floating-point numbers, permuting vectors, and so on
 
 [1] Park et al., Sparsifying Synchronizations for High-Performance
-Shared-Memory Sparse Triangular Solver, ISC 2014
+Shared-Memory Sparse Triangular Solver, ISC 2014,
+(http://pcl.intel-research.net/publications/trsolver_isc14.pdf)
 [2] Patwary et al., Multi-core spanning forest algorithms using the
 disjoint-set data structure, IPDPS 2012
 [3] Chhugani et al., Fast and Efficient Graph Traversal Algorithms for CPUs:
