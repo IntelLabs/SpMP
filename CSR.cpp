@@ -93,7 +93,7 @@ CSR::CSR(int m, int n, int nnz, int base /*=0*/)
   alloc(n, nnz);
 }
 
-CSR::CSR(const char *file, int pad)
+CSR::CSR(const char *file, bool forceSymmetric /*=false*/, int pad /*=1*/)
  : base(0), rowptr(NULL), colidx(NULL), values(NULL), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL)
 {
   int m = atoi(file);
@@ -107,7 +107,7 @@ CSR::CSR(const char *file, int pad)
   }
   else {
     COO Acoo;
-    load_matrix_market((char *)file, Acoo, false, pad);
+    load_matrix_market((char *)file, Acoo, forceSymmetric, pad);
 
     alloc(Acoo.m, Acoo.nnz);
 

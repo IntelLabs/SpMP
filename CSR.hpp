@@ -54,7 +54,7 @@ public:
   CSR();
 
   // Following two constructors will make CSR own the data
-  CSR(const char *file, int pad = 1);
+  CSR(const char *file, bool forceSymmetric = false, int pad = 1);
   CSR(int m, int n, int nnz, int base = 0);
 
   // Following constructor will make CSR does not own the data
@@ -151,5 +151,7 @@ private:
 
 void generate3D27PtLaplacian(CSR *A, int nx, int ny, int nz);
 void generate3D27PtLaplacian(CSR *A, int n);
+
+void splitLU(const CSR& A, CSR *L, CSR *U);
 
 } // namespace SpMP
