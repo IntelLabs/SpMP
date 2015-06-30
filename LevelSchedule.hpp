@@ -122,6 +122,32 @@ unsigned long long taskTimeCnt[NUM_MAX_THREADS];
 
 class FusedGSAndSpMVSchedule;
 
+/**
+ * Estimate the time of each row for load balanced partitioning
+ */
+class CostFunction
+{
+public :
+  virtual int getCostOf(int row) const { return 1; }
+};
+
+/**
+ * cost[i] = prefixSum[i + 1] - prefixSum[i]
+ *
+ * Useful if cost is proportional to nnz of each row
+ * (use prefixSum = rowptr)
+ */
+class PrefixSumCostFunction : public CostFunction
+{
+public :
+  PrefixSumCostFunction(const int *prefixSum) : prefixSum(prefixSum) { };
+
+  int getCostOf(int row) const { return prefixSum[row + 1] - prefixSum[row]; }
+
+private :
+  const int *prefixSum;
+};
+
 class LevelSchedule
 {
 public :
@@ -145,13 +171,6 @@ public :
   bool useMemoryPool;
 
   FusedGSAndSpMVSchedule *fusedSchedule;
-
-#define LEVEL_CONT_LAYOUT
-#ifdef LEVEL_CONT_LAYOUT
-  int *levContToOrigPerm;
-  int *origToLevContPerm;
-  int *threadContToLevContPerm;
-#endif
 
   /**
    * Find levels and partition each level.
@@ -178,7 +197,9 @@ public :
    * taskBoundariesForward/Backward,
    * threadContBackwardToThreadContForwardPerm
    */
-  void findLevels(const CSR& A, bool forSmoothing = false);
+  void findLevels(const CSR& A);
+
+  void findLevels(const CSR& A, const CostFunction& costFunction);
 
   /**
    * findLevels version that is not dependent on crs_t type
@@ -191,7 +212,7 @@ public :
   void findLevels(
     int m,
     const int *rowptr, const int *diagptr, const int *colidx,
-    bool forSmoothing = false);
+    const CostFunction& costFunction);
 
   /**
    * findLevels version that supports a matrix distributed over multiple MPI nodes
@@ -199,7 +220,7 @@ public :
   void findLevels(
     int m,
     const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
-    bool forSmoothing = false);
+    const CostFunction& costFunction);
 
   /**
    * Remove intra-thread, duplicated, and transitive edges

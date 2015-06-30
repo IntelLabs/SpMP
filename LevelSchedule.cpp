@@ -1320,18 +1320,23 @@ void findLevels_(
   assert(isPerm(reversePerm, m));
 }
 
+void LevelSchedule::findLevels(const CSR& A)
+{
+  findLevels(A, PrefixSumCostFunction(A.rowptr));
+}
+
 void LevelSchedule::findLevels(
-  const CSR& A, bool forSmoothing /* = false*/)
+  const CSR& A, const CostFunction& costFunction)
 {
   assert(A.isSymmetric(false));
-  findLevels(A.m, A.rowptr, A.diagptr, A.extptr, A.colidx, forSmoothing);
+  findLevels(A.m, A.rowptr, A.diagptr, A.extptr, A.colidx, costFunction);
 }
 
 void LevelSchedule::findLevels(
   int m, const int *rowptr, const int *diagptr, const int *colidx,
-  bool forSmoothing /* = false*/)
+  const CostFunction& costFunction)
 {
-  findLevels(m, rowptr, diagptr, NULL, colidx, forSmoothing);
+  findLevels(m, rowptr, diagptr, NULL, colidx, costFunction);
 }
 
 // This routine doesn't depend on that colidx of each row is fully sorted.
@@ -1340,7 +1345,7 @@ void LevelSchedule::findLevels(
 // and all others appear in between.
 void LevelSchedule::findLevels(
   int m, const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
-  bool forSmoothing /* = false*/)
+  const CostFunction& costFunction)
 {
   // extptr points to the beginning of non-local columns (when MPI is used).
   // When MPI is not used, exptr will be set to NULL and we use rowptr + 1 as
@@ -1495,12 +1500,7 @@ void LevelSchedule::findLevels(
     int nnz = 0;
     for (int i = levelBegin; i < levelEnd; ++i) {
       b[i] = nnz;
-      if (forSmoothing) {
-        nnz += rowptr[reversePerm[i] + 1] - rowptr[reversePerm[i]];
-      }
-      else {
-        nnz += diagptr[reversePerm[i]] - rowptr[reversePerm[i]] + 1;
-      }
+      nnz += costFunction.getCostOf(reversePerm[i]);
     }
     int nnzPerThread = (nnz + nthreads - 1)/nthreads;
 
