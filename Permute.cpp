@@ -223,6 +223,7 @@ static void permuteMain_(
           diagCol = newColIdx;
         }
       }
+      assert(!diagptr || diagCol != -1);
 
       if (SORT) {
         // insertion sort
