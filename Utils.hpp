@@ -39,7 +39,7 @@ bool operator<(const std::pair<U, T>& a, const std::pair<U, T>& b)
  * Compare two vectors with a given error margin
  */
 template<class T>
-void CorrectnessCheck(
+bool correctnessCheck(
   const T *expected, const T *actual,
   int n,
   double tol = 1e-5, double ignoreSmallerThanThis = 0) {
@@ -49,8 +49,10 @@ void CorrectnessCheck(
         fabs(actual[i]) >= ignoreSmallerThanThis)) {
       printf("Error at %d expected %g actual %g\n", i, expected[i], actual[i]);
       assert(false);
+      return false;
     }
   }
+  return true;
 }
 
 void getInversePerm(int *inversePerm, const int *perm, int n);
