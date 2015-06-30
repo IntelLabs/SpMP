@@ -36,6 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Expected performance
    (web-Google.mtx can be downloaded from U of Florida matrix collection)
+   BW can change run to run.
 
  In a 18-core Xeon E5-2699 v3 @ 2.3GHz, 56 gbps STREAM BW
 
@@ -62,10 +63,11 @@ SpMV BW   41.32 gbps
  */
  
 #include <omp.h>
+#include <mkl.h>
 
-#include "../CSR.hpp"
+#include "../Utils.hpp"
 
-using namespace SpMP;
+#include "test.hpp"
 
 typedef enum
 {
@@ -81,8 +83,9 @@ int main(int argc, char **argv)
     return -1;
   }
 
-  CSR *A = new CSR(argv[1]);
+  CSR *A = new CSR(argv[1], true /* force-symmetric */);
   int nnz = A->rowptr[A->m];
+  double flops = 2*nnz;
   double bytes = (sizeof(double) + sizeof(int))*nnz;
 
   printf("original bandwidth %d\n", A->getBandwidth());
@@ -90,15 +93,38 @@ int main(int argc, char **argv)
   double *x = MALLOC(double, A->m);
   double *y = MALLOC(double, A->m);
 
+  // allocate a large buffer to flush out cache
+  bufToFlushLlc = (double *)_mm_malloc(LLC_CAPACITY, 64);
+
   const int REPEAT = 128;
+  double times[REPEAT];
 
-  double t = -omp_get_wtime();
   for (int i = 0; i < REPEAT; ++i) {
-    A->multiplyWithVector(y, x);
-  }
-  t += omp_get_wtime();
+    flushLlc();
 
-  printf("SpMV BW %7.2f gbps\n", bytes/(t/REPEAT)/1e9);
+    double t = omp_get_wtime();
+    A->multiplyWithVector(y, x);
+    times[i] = omp_get_wtime() - t;
+  }
+  correctnessCheck(A, y);
+
+  printf("SpMV BW");
+  printEfficiency(times, REPEAT, flops, bytes);
+
+#ifdef MKL
+  for (int i = 0; i < REPEAT; ++i) {
+    flushLlc();
+
+    double t = omp_get_wtime();
+    mkl_cspblas_dcsrgemv(
+      "N", &A->m, A->values, A->rowptr, A->colidx, x, y);
+    times[i] = omp_get_wtime() - t;
+  }
+  correctnessCheck(A, y);
+
+  printf("MKL SpMV BW");
+  printEfficiency(times, REPEAT, flops, bytes);
+#endif
 
   int *perm = MALLOC(int, A->m);
   int *inversePerm = MALLOC(int, A->m);
@@ -108,18 +134,18 @@ int main(int argc, char **argv)
 
     switch (option) {
     case BFS:
-      printf("BFS reordering\n");
+      printf("\nBFS reordering\n");
       break;
     case RCM_WO_SOURCE_SELECTION:
-      printf("RCM reordering w/o source selection heuristic\n");
+      printf("\nRCM reordering w/o source selection heuristic\n");
       break;
     case RCM:
-      printf("RCM reordering\n");
+      printf("\nRCM reordering\n");
       break;
     default: assert(false); break;
     }
 
-    t = -omp_get_wtime();
+    double t = -omp_get_wtime();
     switch (option) {
     case BFS:
       A->getBFSPermutation(perm, inversePerm);
@@ -148,12 +174,15 @@ int main(int argc, char **argv)
     printf("Permute takes %g (%.2f gbps)\n", t, bytes/t/1e9);
     printf("Permuted bandwidth %d\n", APerm->getBandwidth());
 
-    t = -omp_get_wtime();
     for (int i = 0; i < REPEAT; ++i) {
+      flushLlc();
+
+      t = omp_get_wtime();
       APerm->multiplyWithVector(y, x);
+      times[i] = omp_get_wtime() - t;
     }
-    t += omp_get_wtime();
-    printf("SpMV BW %7.2f gbps\n", bytes/(t/REPEAT)/1e9);
+    printf("SpMV BW");
+    printEfficiency(times, REPEAT, flops, bytes);
 
     delete APerm;
   }

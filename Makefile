@@ -1,21 +1,25 @@
 LOADIMBA=0
-XEON?=yes
 LOADIMBA=${loadimba}
 
 LIBRARY		= libspmp.a
 
 CC		= icpc
-CCFLAGS		= -openmp -std=c++11 -ipp -Wno-deprecated -Wall #-g
+CCFLAGS		= -openmp -std=c++11 -ipp -Wno-deprecated -Wall
+
 ifeq (yes, $(DBG))
   CCFLAGS += -O0 -g
 else
-	CCFLAGS += -O3 -DNDEBUG
+  CCFLAGS += -O3 -DNDEBUG
 endif
 
-ifeq (yes, $(XEON))
-  CCFLAGS += -xHost
+ifeq (yes, $(XEON_PHI))
+  CCFLAGS	+= -mmic
 else
-  CCFLAGS		+= -mmic
+  CCFLAGS += -xHost
+endif
+
+ifeq (yes, $(MKL))
+  CCFLAGS += -mkl -DMKL
 endif
 
 ifeq (${LOADIMBA}, 1)
@@ -37,9 +41,12 @@ $(LIBRARY): $(OBJS)
 all: clean
 	$(MAKE) $(LIBRARY)
 
-test: test/gs_test test/reordering_test
+test: test/gs_test test/reordering_test test/trsv_test
 
 test/gs_test: test/gs_test.o $(LIBRARY)
+	$(CC) $(CCFLAGS) -o $@ $^
+
+test/trsv_test: test/trsv_test.o $(LIBRARY)
 	$(CC) $(CCFLAGS) -o $@ $^
 
 test/reordering_test: test/reordering_test.o $(LIBRARY)

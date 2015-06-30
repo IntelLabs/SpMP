@@ -25,8 +25,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*!
  * \brief Example of parallelizing GS-like loops with data-dependent
  *        loop carried dependencies.
- *        This example runs symmetric GS smoothing, but SpMP also can
- *        be used for sparse triangular solver, ILU factorization, and so on.
+ *        This example runs symmetric GS preconditioner, but SpMP also can
+ *        be used for ILU factorization and so on.
  *
  * \ref "Sparsifying Synchronizations for High-Performance Shared-Memory Sparse
  *      Triangular Solver", Park et al., ISC 2014
@@ -36,42 +36,44 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   
  In a 18-core Xeon E5-2699 v3 @ 2.3GHz, 56 gbps STREAM BW
 
-OMP_NUM_THREADS=18 KMP_AFFINITY=granularity=fine,compact,1 test/gs_test 192
+OMP_NUM_THREADS=18 KMP_AFFINITY=granularity=fine,compact,1 test/trsv_test 192
 input=192
 parallelism 5289.901345
-fwd_ref                    1.65 gflops   10.00 gbps
-bwd_ref                    1.45 gflops    8.83 gbps
-fwd_barrier                3.54 gflops   21.48 gbps
-bwd_barrier                3.31 gflops   20.11 gbps
-fwd_p2p                    4.04 gflops   24.55 gbps
-bwd_p2p                    3.66 gflops   22.24 gbps
-fwd_p2p_tr_red             4.40 gflops   26.72 gbps
-bwd_p2p_tr_red             3.84 gflops   23.33 gbps
-fwd_barrier_perm           8.82 gflops   53.59 gbps
-bwd_barrier_perm           8.40 gflops   51.05 gbps
-fwd_p2p_perm               9.19 gflops   55.82 gbps
-bwd_p2p_perm               8.70 gflops   52.85 gbps
-fwd_p2p_tr_red_perm        9.21 gflops   55.96 gbps
-bwd_p2p_tr_red_perm        8.70 gflops   52.86 gbps
+fwd_ref                    1.41 gflops    8.64 gbps
+bwd_ref                    1.32 gflops    8.12 gbps
+fwd_barrier                3.80 gflops   23.33 gbps
+bwd_barrier                3.56 gflops   21.86 gbps
+fwd_p2p                    3.67 gflops   22.57 gbps
+bwd_p2p                    3.46 gflops   21.23 gbps
+fwd_p2p_tr_red             3.68 gflops   22.60 gbps
+bwd_p2p_tr_red             3.46 gflops   21.25 gbps
+fwd_barrier_perm           8.33 gflops   51.17 gbps
+bwd_barrier_perm           8.00 gflops   49.13 gbps
+fwd_p2p_perm               8.73 gflops   53.63 gbps
+bwd_p2p_perm               8.43 gflops   51.77 gbps
+fwd_p2p_tr_red_perm        8.72 gflops   53.56 gbps
+bwd_p2p_tr_red_perm        8.41 gflops   51.69 gbps
 
-OMP_NUM_THREADS=18 KMP_AFFINITY=granularity=fine,compact,1 test/gs_test inline_1.mtx
+OMP_NUM_THREADS=18 KMP_AFFINITY=granularity=fine,compact,1 test/trsv_test inline_1.mtx
 input=/home/jpark103/matrices/inline_1.mtx
 /home/jpark103/matrices/inline_1.mtx:::symmetric m=503712 n=503712 nnz=36816342
 parallelism 287.506849
-fwd_ref                    1.83 gflops   11.06 gbps
-bwd_ref                    1.30 gflops    7.84 gbps
-fwd_barrier                3.76 gflops   22.67 gbps
-bwd_barrier                3.70 gflops   22.32 gbps
-fwd_p2p                    4.23 gflops   25.47 gbps
-bwd_p2p                    4.04 gflops   24.36 gbps
-fwd_p2p_tr_red             4.34 gflops   26.18 gbps
-bwd_p2p_tr_red             4.20 gflops   25.29 gbps
-fwd_barrier_perm           7.34 gflops   44.23 gbps
-bwd_barrier_perm           6.98 gflops   42.07 gbps
-fwd_p2p_perm               8.36 gflops   50.38 gbps
-bwd_p2p_perm               7.45 gflops   44.88 gbps
-fwd_p2p_tr_red_perm        9.10 gflops   54.83 gbps
-bwd_p2p_tr_red_perm        8.52 gflops   51.36 gbps
+fwd_ref                    1.63 gflops    9.89 gbps
+bwd_ref                    1.23 gflops    7.42 gbps
+fwd_barrier                3.55 gflops   21.48 gbps
+bwd_barrier                3.04 gflops   18.40 gbps
+fwd_p2p                    3.89 gflops   23.55 gbps
+bwd_p2p                    3.94 gflops   23.86 gbps
+fwd_p2p_tr_red             4.19 gflops   25.37 gbps
+bwd_p2p_tr_red             4.46 gflops   27.00 gbps
+fwd_barrier_perm           5.86 gflops   35.49 gbps
+bwd_barrier_perm           5.51 gflops   33.38 gbps
+fwd_p2p_perm               6.91 gflops   41.86 gbps
+bwd_p2p_perm               5.82 gflops   35.26 gbps
+fwd_p2p_tr_red_perm        8.01 gflops   48.49 gbps
+bwd_p2p_tr_red_perm        7.22 gflops   43.74 gbps
+fwd_mkl                    2.11 gflops   12.76 gbps
+bwd_mkl                    2.04 gflops   12.33 gbps
  */
 
 #include <cassert>
@@ -80,6 +82,10 @@ bwd_p2p_tr_red_perm        8.52 gflops   51.36 gbps
 #include <cfloat>
 
 #include <omp.h>
+
+#ifdef MKL
+#include <mkl.h>
+#endif
 
 #include "../LevelSchedule.hpp"
 #include "../synk/barrier.hpp"
@@ -97,39 +103,35 @@ typedef enum
 } Option;
 
 /**
- * Reference sequential Gauss-Seidel smoother
+ * Reference sequential sparse triangular solver
  */
-template<bool IS_FORWARD>
-void gsRef(const CSR& A, double y[], const double b[])
+void forwardSolveRef(const CSR& A, double y[], const double b[])
 {
-  int iBegin = IS_FORWARD ? 0 : A.m - 1;
-  int iEnd = IS_FORWARD ? A.m : -1;
-  int iDelta = IS_FORWARD ? 1 : -1;
-
-  for (int i = iBegin; i != iEnd; i += iDelta) {
+  for (int i = 0; i < A.m; ++i) {
     double sum = b[i];
     for (int j = A.rowptr[i]; j < A.rowptr[i + 1]; ++j) {
       sum -= A.values[j]*y[A.colidx[j]];
     }
-    y[i] += sum*A.idiag[i];
+    y[i] = sum*A.idiag[i];
   } // for each row
 }
 
-void forwardGSRef(const CSR& A, double y[], const double b[])
+void backwardSolveRef(const CSR& A, double y[], const double b[])
 {
-  gsRef<true>(A, y, b);
-}
-
-void backwardGSRef(const CSR& A, double y[], const double b[])
-{
-  gsRef<false>(A, y, b);
+  for (int i = A.m - 1; i >= 0; --i) {
+    double sum = b[i];
+    for (int j = A.rowptr[i]; j < A.rowptr[i + 1]; ++j) {
+      sum -= A.values[j]*y[A.colidx[j]];
+    }
+    y[i] = sum;
+  } // for each row
 }
 
 /**
- * Forward Gauss-Seidel smoother parallelized with level scheduling
+ * Forward sparse triangular solver parallelized with level scheduling
  * and barrier synchronization
  */
-void forwardGSWithBarrier(
+void forwardSolveWithBarrier(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule,
   const int *perm)
@@ -149,7 +151,7 @@ void forwardGSWithBarrier(
         for (int j = A.rowptr[row]; j < A.rowptr[row + 1]; ++j) {
           sum -= A.values[j]*y[A.colidx[j]];
         }
-        y[row] += sum*A.idiag[row];
+        y[row] = sum*A.idiag[row];
       } // for each row
 
       bar->wait(omp_get_thread_num());
@@ -158,10 +160,10 @@ void forwardGSWithBarrier(
 }
 
 /**
- * Backward Gauss-Seidel smoother parallelized with level scheduling
+ * Backward sparse triangular solver parallelized with level scheduling
  * and barrier synchronization
  */
-void backwardGSWithBarrier(
+void backwardSolveWithBarrier(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule,
   const int *perm)
@@ -181,7 +183,7 @@ void backwardGSWithBarrier(
         for (int j = A.rowptr[row + 1] - 1; j >= A.rowptr[row]; --j) {
           sum -= A.values[j]*y[A.colidx[j]];
         }
-        y[row] += sum*A.idiag[row];
+        y[row] = sum;
       } // for each row
       bar->wait(omp_get_thread_num());
     } // for each level
@@ -189,10 +191,10 @@ void backwardGSWithBarrier(
 }
 
 /**
- * Forward Gauss-Seidel smoother parallelized with level scheduling
+ * Forward sparse triangular solver parallelized with level scheduling
  * and point-to-point synchronization
  */
-void forwardGS(
+void forwardSolve(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule,
   const int *perm)
@@ -227,7 +229,7 @@ void forwardGS(
         for (int j = A.rowptr[row]; j < A.rowptr[row + 1]; ++j) {
           sum -= A.values[j]*y[A.colidx[j]];
         }
-        y[row] += sum*A.idiag[row];
+        y[row] = sum*A.idiag[row];
       }
 
       SPMP_LEVEL_SCHEDULE_NOTIFY;
@@ -236,10 +238,10 @@ void forwardGS(
 }
 
 /**
- * Backward Gauss-Seidel smoother parallelized with level scheduling
+ * Backward sparse triangular solver parallelized with level scheduling
  * and point-to-point synchronization
  */
-void backwardGS(
+void backwardSolve(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule,
   const int *perm)
@@ -274,7 +276,7 @@ void backwardGS(
         for (int j = A.rowptr[row + 1] - 1; j >= A.rowptr[row]; --j) {
           sum -= A.values[j]*y[A.colidx[j]];
         }
-        y[row] += sum*A.idiag[row];
+        y[row] = sum;
       }
 
       SPMP_LEVEL_SCHEDULE_NOTIFY;
@@ -283,10 +285,10 @@ void backwardGS(
 }
 
 /**
- * Forward Gauss-Seidel smoother parallelized with level scheduling
+ * Forward sparse triangular solver parallelized with level scheduling
  * and barrier synchronization. Matrix is reordered.
  */
-void forwardGSWithBarrierAndReorderedMatrix(
+void forwardSolveWithBarrierAndReorderedMatrix(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule)
 {
@@ -304,7 +306,7 @@ void forwardGSWithBarrierAndReorderedMatrix(
         for (int j = A.rowptr[i]; j < A.rowptr[i + 1]; ++j) {
           sum -= A.values[j]*y[A.colidx[j]];
         }
-        y[i] += sum*A.idiag[i];
+        y[i] = sum*A.idiag[i];
       } // for each row
       bar->wait(omp_get_thread_num());
     } // for each level
@@ -312,10 +314,10 @@ void forwardGSWithBarrierAndReorderedMatrix(
 }
 
 /**
- * Backward Gauss-Seidel smoother parallelized with level scheduling
+ * Backward sparse triangular solver parallelized with level scheduling
  * and barrier synchronization. Matrix is reordered.
  */
-void backwardGSWithBarrierAndReorderedMatrix(
+void backwardSolveWithBarrierAndReorderedMatrix(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule)
 {
@@ -333,7 +335,7 @@ void backwardGSWithBarrierAndReorderedMatrix(
         for (int j = A.rowptr[i + 1] - 1; j >= A.rowptr[i]; --j) {
           sum -= A.values[j]*y[A.colidx[j]];
         }
-        y[i] += sum*A.idiag[i];
+        y[i] = sum;
       } // for each row
       bar->wait(omp_get_thread_num());
     } // for each level
@@ -341,10 +343,10 @@ void backwardGSWithBarrierAndReorderedMatrix(
 }
 
 /**
- * Forward Gauss-Seidel smoother parallelized with level scheduling
+ * Forward sparse triangular solver parallelized with level scheduling
  * and point-to-point synchronization
  */
-void forwardGSWithReorderedMatrix(
+void forwardSolveWithReorderedMatrix(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule)
 {
@@ -377,7 +379,7 @@ void forwardGSWithReorderedMatrix(
         for (int j = A.rowptr[i]; j < A.rowptr[i + 1]; ++j) {
           sum -= A.values[j]*y[A.colidx[j]];
         }
-        y[i] += sum*A.idiag[i];
+        y[i] = sum*A.idiag[i];
       }
 
       SPMP_LEVEL_SCHEDULE_NOTIFY;
@@ -386,10 +388,10 @@ void forwardGSWithReorderedMatrix(
 }
 
 /**
- * Backward Gauss-Seidel smoother parallelized with level scheduling
+ * Backward sparse triangular solver parallelized with level scheduling
  * and point-to-point synchronization
  */
-void backwardGSWithReorderedMatrix(
+void backwardSolveWithReorderedMatrix(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule)
 {
@@ -422,14 +424,13 @@ void backwardGSWithReorderedMatrix(
         for (int j = A.rowptr[i + 1] - 1; j >= A.rowptr[i]; --j) {
           sum -= A.values[j]*y[A.colidx[j]];
         }
-        y[i] += sum*A.idiag[i];
+        y[i] = sum;
       }
 
       SPMP_LEVEL_SCHEDULE_NOTIFY;
     } // for each task
   } // omp parallel
 }
-
 
 int main(int argc, char **argv)
 {
@@ -475,6 +476,13 @@ int main(int argc, char **argv)
   CSR *A = new CSR(argc > 1 ? argv[1] : buf);
 
   /////////////////////////////////////////////////////////////////////////////
+  // Split lower and upper triangular parts
+  /////////////////////////////////////////////////////////////////////////////
+
+  CSR *L = new CSR, *U = new CSR;
+  splitLU(*A, L, U);
+
+  /////////////////////////////////////////////////////////////////////////////
   // Construct schedules
   /////////////////////////////////////////////////////////////////////////////
 
@@ -510,7 +518,8 @@ int main(int argc, char **argv)
   assert(isPerm(perm, A->m));
   assert(isPerm(invPerm, A->m));
 
-  CSR *APerm = A->permute(perm, invPerm, true /*sort*/);
+  CSR *LPerm = L->permute(perm, invPerm);
+  CSR *UPerm = U->permute(perm, invPerm);
 
   /////////////////////////////////////////////////////////////////////////////
   // Allocate vectors
@@ -526,15 +535,15 @@ int main(int argc, char **argv)
   double flop, byte;
   for (int i = 0; i < 2; ++i) {
     int nnz = A->rowptr[A->m];
-    flop = 2*nnz;
-    byte = nnz*(sizeof(double) + sizeof(int)) + A->m*sizeof(int);
+    flop = 2*((nnz - A->m)/2 + A->m);
+    byte = ((nnz - A->m)/2 + A->m)*(sizeof(double) + sizeof(int)) + A->m*sizeof(int);
   }
 
   // allocate a large buffer to flush out cache
   bufToFlushLlc = (double *)_mm_malloc(LLC_CAPACITY, 64);
 
   /////////////////////////////////////////////////////////////////////////////
-  // GS smoother w/o reordering
+  // sparse triangular solver w/o reordering
   /////////////////////////////////////////////////////////////////////////////
 
   int REPEAT = 128;
@@ -553,13 +562,13 @@ int main(int argc, char **argv)
 
       switch (option) {
       case REFERENCE :
-        forwardGSRef(*A, y, b); break;
+        forwardSolveRef(*L, y, b); break;
       case BARRIER :
-        forwardGSWithBarrier(*A, y, b, *barrierSchedule, invPerm); break;
+        forwardSolveWithBarrier(*L, y, b, *barrierSchedule, invPerm); break;
       case P2P :
-        forwardGS(*A, y, b, *p2pSchedule, invPerm); break;
+        forwardSolve(*L, y, b, *p2pSchedule, invPerm); break;
       case P2P_WITH_TRANSITIVE_REDUCTION :
-        forwardGS(*A, y, b, *p2pScheduleWithTransitiveReduction, invPerm); break;
+        forwardSolve(*L, y, b, *p2pScheduleWithTransitiveReduction, invPerm); break;
       default: assert(false); break;
       }
 
@@ -568,13 +577,13 @@ int main(int argc, char **argv)
 
       switch (option) {
       case REFERENCE :
-        backwardGSRef(*A, x, y); break;
+        backwardSolveRef(*U, x, y); break;
       case BARRIER :
-        backwardGSWithBarrier(*A, x, y, *barrierSchedule, invPerm); break;
+        backwardSolveWithBarrier(*U, x, y, *barrierSchedule, invPerm); break;
       case P2P :
-        backwardGS(*A, x, y, *p2pSchedule, invPerm); break;
+        backwardSolve(*U, x, y, *p2pSchedule, invPerm); break;
       case P2P_WITH_TRANSITIVE_REDUCTION :
-        backwardGS(*A, x, y, *p2pScheduleWithTransitiveReduction, invPerm); break;
+        backwardSolve(*U, x, y, *p2pScheduleWithTransitiveReduction, invPerm); break;
       default: assert(false); break;
       }
 
@@ -600,7 +609,7 @@ int main(int argc, char **argv)
   } // for each option
 
   /////////////////////////////////////////////////////////////////////////////
-  // GS smoother w/ reordering
+  // sparse triangular solver w/ reordering
   /////////////////////////////////////////////////////////////////////////////
 
   double *bPerm = getReorderVector(b, perm, A->m);
@@ -621,16 +630,16 @@ int main(int argc, char **argv)
 
       switch (option) {
       case BARRIER :
-        forwardGSWithBarrierAndReorderedMatrix(
-          *APerm, y, bPerm, *barrierSchedule);
+        forwardSolveWithBarrierAndReorderedMatrix(
+          *LPerm, y, bPerm, *barrierSchedule);
         break;
       case P2P :
-        forwardGSWithReorderedMatrix(
-          *APerm, y, bPerm, *p2pSchedule);
+        forwardSolveWithReorderedMatrix(
+          *LPerm, y, bPerm, *p2pSchedule);
         break;
       case P2P_WITH_TRANSITIVE_REDUCTION :
-        forwardGSWithReorderedMatrix(
-          *APerm, y, bPerm, *p2pScheduleWithTransitiveReduction);
+        forwardSolveWithReorderedMatrix(
+          *LPerm, y, bPerm, *p2pScheduleWithTransitiveReduction);
         break;
       default: assert(false); break;
       }
@@ -640,16 +649,16 @@ int main(int argc, char **argv)
 
       switch (option) {
       case BARRIER :
-        backwardGSWithBarrierAndReorderedMatrix(
-          *APerm, x, y, *barrierSchedule);
+        backwardSolveWithBarrierAndReorderedMatrix(
+          *UPerm, x, y, *barrierSchedule);
         break;
       case P2P :
-        backwardGSWithReorderedMatrix(
-          *APerm, x, y, *p2pSchedule);
+        backwardSolveWithReorderedMatrix(
+          *UPerm, x, y, *p2pSchedule);
         break;
       case P2P_WITH_TRANSITIVE_REDUCTION :
-        backwardGSWithReorderedMatrix(
-          *APerm, x, y, *p2pScheduleWithTransitiveReduction);
+        backwardSolveWithReorderedMatrix(
+          *UPerm, x, y, *p2pScheduleWithTransitiveReduction);
         break;
       default: assert(false); break;
       }
@@ -675,12 +684,124 @@ int main(int argc, char **argv)
     }
   }
 
+#ifdef MKL
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Inspector-Executor interface in MKL 11.3+
+  /////////////////////////////////////////////////////////////////////////////
+
+  sparse_matrix_t mklA;
+  sparse_status_t stat = mkl_sparse_d_create_csr(
+    &mklA,
+    SPARSE_INDEX_BASE_ZERO, A->m, A->n,
+    A->rowptr, A->rowptr + 1,
+    A->colidx, A->values);
+
+  if (SPARSE_STATUS_SUCCESS != stat) {
+    fprintf(stderr, "Failed to create mkl csr\n");
+    return -1;
+  }
+
+  matrix_descr descL;
+  descL.type = SPARSE_MATRIX_TYPE_TRIANGULAR;
+  descL.mode = SPARSE_FILL_MODE_LOWER;
+  descL.diag = SPARSE_DIAG_NON_UNIT;
+
+  sparse_matrix_t mklL, mklU;
+  stat = mkl_sparse_copy(mklA, descL, &mklL);
+  if (SPARSE_STATUS_SUCCESS != stat) {
+    fprintf(stderr, "Failed to create mkl csr lower\n");
+    return -1;
+  }
+
+  stat = mkl_sparse_set_sv_hint(
+    mklL, SPARSE_OPERATION_NON_TRANSPOSE, descL, REPEAT);
+
+  if (SPARSE_STATUS_SUCCESS != stat) {
+    fprintf(stderr, "Failed to set sv hint\n");
+    return -1;
+  }
+
+  stat = mkl_sparse_optimize(mklL);
+
+  if (SPARSE_STATUS_SUCCESS != stat) {
+    fprintf(stderr, "Failed to sparse optimize\n");
+    return -1;
+  }
+
+  matrix_descr descU;
+  descU.type = SPARSE_MATRIX_TYPE_TRIANGULAR;
+  descU.mode = SPARSE_FILL_MODE_UPPER;
+  descU.diag = SPARSE_DIAG_UNIT;
+
+  stat = mkl_sparse_copy(mklA, descU, &mklU);
+  if (SPARSE_STATUS_SUCCESS != stat) {
+    fprintf(stderr, "Failed to create mkl csr upper\n");
+    return -1;
+  }
+
+  stat = mkl_sparse_set_sv_hint(
+    mklU, SPARSE_OPERATION_NON_TRANSPOSE, descU, REPEAT);
+
+  if (SPARSE_STATUS_SUCCESS != stat) {
+    fprintf(stderr, "Failed to set sv hint\n");
+    return -1;
+  }
+
+  stat = mkl_sparse_optimize(mklU);
+
+  if (SPARSE_STATUS_SUCCESS != stat) {
+    fprintf(stderr, "Failed to sparse optimize\n");
+    return -1;
+  }
+
+  for (int i = 0; i < REPEAT; ++i) {
+    flushLlc();
+
+    initializeX(x, A->m);
+    initializeX(y, A->m);
+
+    double t = omp_get_wtime();
+
+    mkl_sparse_d_trsv(SPARSE_OPERATION_NON_TRANSPOSE, 1, mklL, descL, b, y);
+
+    timesForward[i] = omp_get_wtime() - t;
+    t = omp_get_wtime();
+
+    mkl_sparse_d_trsv(SPARSE_OPERATION_NON_TRANSPOSE, 1, mklU, descU, y, x);
+
+    timesBackward[i] = omp_get_wtime() - t;
+
+    if (i == REPEAT - 1) {
+      for (int j = 0; j < 2; ++j) {
+        printf(0 == j ? "fwd_" : "bwd_");
+        printf("mkl\t\t\t");
+        printEfficiency(
+          0 == j ? timesForward : timesBackward, REPEAT, flop, byte);
+      }
+
+      correctnessCheck(A, x);
+    }
+  }
+
+  stat = mkl_sparse_destroy(mklA);
+  if (SPARSE_STATUS_SUCCESS != stat) {
+    fprintf(stderr, "Failed to destroy mkl csr\n");
+    return -1;
+  }
+
+#endif
+
   delete barrierSchedule;
   delete p2pSchedule;
   delete p2pScheduleWithTransitiveReduction;
 
   delete A;
-  delete APerm;
+  delete L;
+  delete U;
+
+  delete LPerm;
+  delete UPerm;
 
   FREE(b);
   FREE(y);
