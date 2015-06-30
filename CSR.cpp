@@ -107,7 +107,7 @@ CSR::CSR(const char *file, int pad)
   }
   else {
     COO Acoo;
-    load_matrix_market((char *)file, Acoo, pad);
+    load_matrix_market((char *)file, Acoo, false, pad);
 
     alloc(Acoo.m, Acoo.nnz);
 
