@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <cstring>
+
 #include "CSR.hpp"
 
 using namespace std;
@@ -104,6 +107,184 @@ void splitLU(const CSR& A, CSR *L, CSR *U)
         rowPtrPartialSum[1][tid + 1] - (A.rowptr[iEnd] - extptr[iEnd - 1]);
     }
   } // omp parallel
+}
+
+bool getSymmetricNnzPattern(
+  const CSR *A, int **symRowPtr, int **symDiagPtr, int **symExtPtr, int **symColIdx)
+{
+  int m = A->m;
+  const int *rowptr = A->rowptr;
+  const int *colidx = A->colidx;
+
+  const int *extptr = A->extptr ? A->extptr : rowptr + 1;
+
+  size_t symRowPtrBegin;
+  if (A->useMemoryPool_()) {
+    symRowPtrBegin = MemoryPool::getSingleton()->getTail();
+  }
+  *symRowPtr = A->allocate_<int>(m + 1);
+  (*symRowPtr)[0] = 0;
+  int *cnts = NULL;
+
+  volatile bool isSymmetric = true;
+
+//#define PRINT_TIME_BREAKDOWN
+
+#pragma omp parallel
+  {
+    int nthreads = omp_get_num_threads();
+    int tid = omp_get_thread_num();
+
+    int iPerThread = (m + nthreads - 1)/nthreads;
+    int iBegin = min(iPerThread*tid, m);
+    int iEnd = min(iBegin + iPerThread, m);
+
+#ifdef PRINT_TIME_BREAKDOWN
+    unsigned long long t = __rdtsc();
+#endif
+
+    // construct symRowPtr
+    for (int i = iBegin; i < iEnd; ++i) {
+      (*symRowPtr)[i + 1] = rowptr[i + 1] - rowptr[i];
+    }
+#pragma omp barrier
+
+#ifdef PRINT_TIME_BREAKDOWN
+    if (0 == tid) {
+      printf("counting fwd dependencies takes %f\n", (__rdtsc() - t)/get_cpu_freq());
+    }
+    t = __rdtsc();
+#endif
+
+    volatile bool localIsSymmetric = true;
+    for (int i = iBegin; i < iEnd; ++i) {
+      for (int j = rowptr[i]; j < extptr[i]; ++j) {
+        int c = colidx[j];
+        // assume colidx is sorted
+        if (!binary_search(colidx + rowptr[c], colidx + extptr[c], i)) {
+          // for each (i, c), add (c, i)
+          __sync_fetch_and_add(*symRowPtr + c + 1, 1);
+          localIsSymmetric = false;
+        }
+      }
+    }
+
+    if (!localIsSymmetric) isSymmetric = false;
+
+#pragma omp barrier
+#ifdef PRINT_TIME_BREAKDOWN
+    if (0 == tid) {
+      printf("counting bwd dependencies takes %f\n", (__rdtsc() - t)/get_cpu_freq());
+    }
+    t = __rdtsc();
+#endif
+    if (!isSymmetric) {
+#pragma omp single
+      {
+        // FIXME - parallel prefix sum
+        for (int i = 0; i < m; ++i) {
+          (*symRowPtr)[i + 1] += (*symRowPtr)[i];
+        }
+        *symColIdx = MALLOC(int, (*symRowPtr)[m]);
+
+        *symDiagPtr = MALLOC(int, m + 1);
+        if (A->extptr) *symExtPtr = MALLOC(int, m + 1);
+        cnts = MALLOC(int, m);
+      }
+
+#ifdef PRINT_TIME_BREAKDOWN
+      if (0 == tid) {
+        printf("prefix sum of symRowPtr takes %f\n", (__rdtsc() - t)/get_cpu_freq());
+      }
+      t = __rdtsc();
+#endif
+
+      // construct symColIdx
+
+      // forward direction
+      for (int i = iBegin; i < iEnd; ++i) {
+        cnts[i] = extptr[i] - rowptr[i];
+        memcpy(
+          *symColIdx + (*symRowPtr)[i], colidx + rowptr[i],
+          cnts[i]*sizeof(int));
+      }
+#pragma omp barrier
+#ifdef PRINT_TIME_BREAKDOWN
+      if (0 == tid) {
+        printf("construct forward symColIdx takes %f\n", (__rdtsc() - t)/get_cpu_freq());
+      }
+      t = __rdtsc();
+#endif
+
+      // backward direction
+      for (int i = iBegin; i < iEnd; ++i) {
+        for (int j = rowptr[i]; j < extptr[i]; ++j) {
+          int c = colidx[j];
+          if (!binary_search(colidx + rowptr[c], colidx + extptr[c], i)) {
+            // for each (i, c), add (c, i)
+            int cnt = __sync_fetch_and_add(cnts + c, 1);
+            (*symColIdx)[(*symRowPtr)[c] + cnt] = i;
+          }
+        }
+      }
+#pragma omp barrier
+#ifdef PRINT_TIME_BREAKDOWN
+      if (0 == tid) {
+        printf("construct backward symColIdx takes %f\n", (__rdtsc() - t)/get_cpu_freq());
+      }
+      t = __rdtsc();
+#endif
+
+      // sort colidx and copy remote
+      for (int i = iBegin; i < iEnd; ++i) {
+        sort(*symColIdx + (*symRowPtr)[i], *symColIdx + (*symRowPtr)[i] + cnts[i]);
+        memcpy(
+          *symColIdx + (*symRowPtr)[i] + cnts[i], colidx + extptr[i],
+          (rowptr[i + 1] - extptr[i])*sizeof(int));
+
+        if (A->extptr) (*symExtPtr)[i] = (*symRowPtr)[i] + cnts[i];
+
+        for (int j = (*symRowPtr)[i]; j < (*symRowPtr)[i + 1]; ++j) {
+          if ((*symColIdx)[j] == i) (*symDiagPtr)[i] = j;
+        }
+      }
+#ifdef PRINT_TIME_BREAKDOWN
+      if (0 == tid) {
+        printf("sorting symColIdx takes %f\n", (__rdtsc() - t)/get_cpu_freq());
+      }
+#undef PRINT_TIME_BREAKDOWN
+#endif
+    } // !isSymmetric
+  } // omp parallel
+
+  if (isSymmetric) {
+    if (!A->useMemoryPool_()) {
+      FREE(*symRowPtr);
+    }
+    else {
+      MemoryPool::getSingleton()->setTail(symRowPtrBegin);
+      *symRowPtr = NULL;
+    }
+  }
+
+  FREE(cnts);
+
+#ifndef NDEBUG
+  CSR sym;
+  sym.rowptr = *symRowPtr;
+  sym.colidx = *symColIdx;
+  sym.diagptr = *symDiagPtr;
+  sym.extptr = *symExtPtr;
+
+  assert(sym.isSymmetric(false, true));
+
+  sym.rowptr = NULL;
+  sym.colidx = NULL;
+  sym.diagptr = NULL;
+  sym.extptr = NULL;
+#endif
+
+  return isSymmetric;
 }
 
 } // namespace SpMP

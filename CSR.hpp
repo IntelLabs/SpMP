@@ -153,5 +153,7 @@ void generate3D27PtLaplacian(CSR *A, int nx, int ny, int nz);
 void generate3D27PtLaplacian(CSR *A, int n);
 
 void splitLU(const CSR& A, CSR *L, CSR *U);
+bool getSymmetricNnzPattern(
+  const CSR *A, int **symRowPtr, int **symDiagPtr, int **symExtPtr, int **symColIdx);
 
 } // namespace SpMP
