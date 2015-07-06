@@ -201,6 +201,10 @@ public :
 
   void findLevels(const CSR& A, const CostFunction& costFunction);
 
+  void findLevels(
+    int m, const int *rowptr, const int *colidx,
+    const CostFunction& costFunction);
+
   /**
    * findLevels version that is not dependent on crs_t type
    *
@@ -243,14 +247,20 @@ public :
    * constructTaskGraph version that is not dependent on crs_t type
    */
   void constructTaskGraph(
-    int m, int nnz,
+    int m,
+    const int *rowptr, const int *colidx,
+    bool transitiveReduction = true,
+    bool fuseSpmv = false);
+
+  void constructTaskGraph(
+    int m,
     const int *rowptr, const int *diagptr,
     const int *colidx,
     bool transitiveReduction = true,
     bool fuseSpmv = false);
 
   void constructTaskGraph(
-    int m, int nnz,
+    int m,
     const int *rowptr, const int *diagptr, const int *extptr,
     const int *colidx,
     bool transitiveReduction = true,

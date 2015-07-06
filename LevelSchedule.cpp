@@ -132,21 +132,54 @@ void LevelSchedule::constructTaskGraph(
   bool fuseSpmv /* = false */)
 {
   constructTaskGraph(
-    A.m, A.rowptr[A.m],
+    A.m,
     A.rowptr, A.diagptr, A.extptr,
     A.colidx,
     transitiveReduction, fuseSpmv);
 }
 
+static int *constructDiagPtr(
+  int m, const int *rowptr, const int *colidx)
+{
+  int *diagptr = MALLOC(int, m);
+#pragma omp parallel for
+  for (int i = 0; i < m; ++i) {
+    for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+      if (colidx[j] >= i) {
+	diagptr[i] = j;
+	break;
+      }
+    }
+  }
+  return diagptr;
+}
+
 void LevelSchedule::constructTaskGraph(
-  int m, int nnz,
+  int m,
+  const int *rowptr, const int *colidx,
+  bool transitiveReduction,
+  bool fuseSpmv /* = false */)
+{
+  int *diagptr = constructDiagPtr(m, rowptr, colidx);
+
+  constructTaskGraph(
+    m,
+    rowptr, diagptr, NULL,
+    colidx,
+    transitiveReduction, fuseSpmv);
+
+  FREE(diagptr);
+}
+
+void LevelSchedule::constructTaskGraph(
+  int m,
   const int *rowptr, const int *diagptr,
   const int *colidx,
   bool transitiveReduction,
   bool fuseSpmv /* = false */)
 {
   constructTaskGraph(
-    m, nnz,
+    m,
     rowptr, diagptr, NULL,
     colidx,
     transitiveReduction, fuseSpmv);
@@ -155,7 +188,7 @@ void LevelSchedule::constructTaskGraph(
 #define NUM_MAX_THREADS (2048)
 
 void LevelSchedule::constructTaskGraph(
-  int m, int nnz,
+  int m,
   const int *rowptr, const int *diagptr, const int *extptr,
   const int *colidx,
   bool transitiveReduction,
@@ -164,6 +197,8 @@ void LevelSchedule::constructTaskGraph(
   if (NULL == extptr) {
     extptr = rowptr + 1;
   }
+
+  int nnz = rowptr[m];
 
   unsigned long long t;
 #ifdef _OPENMP
@@ -1333,6 +1368,15 @@ void LevelSchedule::findLevels(
 }
 
 void LevelSchedule::findLevels(
+  int m, const int *rowptr, const int *colidx,
+  const CostFunction& costFunction)
+{
+  int *diagptr = constructDiagPtr(m, rowptr, colidx);
+  findLevels(m, rowptr, diagptr, NULL, colidx, costFunction);
+  FREE(diagptr);
+}
+
+void LevelSchedule::findLevels(
   int m, const int *rowptr, const int *diagptr, const int *colidx,
   const CostFunction& costFunction)
 {
@@ -1347,6 +1391,12 @@ void LevelSchedule::findLevels(
   int m, const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
   const CostFunction& costFunction)
 {
+#ifndef NDEBUG
+  CSR A(m, m, (int *)rowptr, (int *)colidx, (double *)NULL);
+  assert(A.isSymmetric(false));
+  A.~CSR();
+#endif
+
   // extptr points to the beginning of non-local columns (when MPI is used).
   // When MPI is not used, exptr will be set to NULL and we use rowptr + 1 as
   // extptr.
