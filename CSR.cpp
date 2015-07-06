@@ -116,7 +116,7 @@ CSR::CSR(const char *file, bool forceSymmetric /*=false*/, int pad /*=1*/)
 }
 
 CSR::CSR(int m, int n, int *rowptr, int *colidx, double *values, int base /*=0*/) :
- m(m), n(n), rowptr(rowptr), colidx(colidx), values(values), ownData_(false), idiag(NULL), diag(NULL), extptr(NULL)
+ m(m), n(n), rowptr(rowptr), colidx(colidx), values(values), ownData_(false), idiag(NULL), diag(NULL), extptr(NULL), base(base)
 {
   diagptr = MALLOC(int, m);
 #pragma omp parallel for
@@ -167,7 +167,7 @@ bool CSR::isSymmetric(bool checkValues /*=true*/, bool printFirstNonSymmetry /* 
   for (int i = 0; i < m; ++i) {
     for (int j = rowptr[i] - base; j < extptr[i] - base; ++j) {
       int c = colidx[j] - base;
-      if (c > i) {
+      if (c != i) {
         bool hasPair = false;
         for (int k = rowptr[c] - base; k < extptr[c] - base; ++k) {
           if (colidx[k] - base == i) {
