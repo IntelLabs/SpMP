@@ -271,6 +271,8 @@ bool getSymmetricNnzPattern(
 
 #ifndef NDEBUG
   CSR sym;
+  sym.m = m;
+  sym.n = m;
   sym.rowptr = *symRowPtr;
   sym.colidx = *symColIdx;
   sym.diagptr = *symDiagPtr;
