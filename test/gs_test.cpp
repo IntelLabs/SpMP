@@ -136,7 +136,6 @@ void forwardGSWithBarrier(
 {
 #pragma omp parallel
   {
-    int nthreads = omp_get_num_threads();
     int tid = omp_get_thread_num();
 
     const vector<int>& threadBoundaries = schedule.threadBoundaries;
@@ -152,7 +151,7 @@ void forwardGSWithBarrier(
         y[row] += sum*A.idiag[row];
       } // for each row
 
-      bar->wait(omp_get_thread_num());
+      bar->wait(tid);
     } // for each level
   } // omp parallel
 }
@@ -168,7 +167,6 @@ void backwardGSWithBarrier(
 {
 #pragma omp parallel
   {
-    int nthreads = omp_get_num_threads();
     int tid = omp_get_thread_num();
 
     const vector<int>& threadBoundaries = schedule.threadBoundaries;
@@ -183,7 +181,7 @@ void backwardGSWithBarrier(
         }
         y[row] += sum*A.idiag[row];
       } // for each row
-      bar->wait(omp_get_thread_num());
+      bar->wait(tid);
     } // for each level
   } // omp parallel
 }
@@ -292,7 +290,6 @@ void forwardGSWithBarrierAndReorderedMatrix(
 {
 #pragma omp parallel
   {
-    int nthreads = omp_get_num_threads();
     int tid = omp_get_thread_num();
 
     const vector<int>& threadBoundaries = schedule.threadBoundaries;
@@ -306,7 +303,7 @@ void forwardGSWithBarrierAndReorderedMatrix(
         }
         y[i] += sum*A.idiag[i];
       } // for each row
-      bar->wait(omp_get_thread_num());
+      bar->wait(tid);
     } // for each level
   } // omp parallel
 }
@@ -321,7 +318,6 @@ void backwardGSWithBarrierAndReorderedMatrix(
 {
 #pragma omp parallel
   {
-    int nthreads = omp_get_num_threads();
     int tid = omp_get_thread_num();
 
     const vector<int>& threadBoundaries = schedule.threadBoundaries;
@@ -335,7 +331,7 @@ void backwardGSWithBarrierAndReorderedMatrix(
         }
         y[i] += sum*A.idiag[i];
       } // for each row
-      bar->wait(omp_get_thread_num());
+      bar->wait(tid);
     } // for each level
   } // omp parallel
 }
