@@ -66,15 +66,19 @@ void CSR::permuteRowptr(CSR *ret, const int *reversePerm) const
         ret->extptr[i] = ret->rowptr[i] + extptr[row] - rowptr[row];
       }
     }
+    else {
+      rowPtrSum[tid + 1] = 0;
+    }
 
 #pragma omp barrier
-#pragma omp single
+#pragma omp master
     {
       for (int tid = 1; tid < nthreads; ++tid) {
         rowPtrSum[tid + 1] += rowPtrSum[tid];
       }
       ret->rowptr[m] = rowPtrSum[nthreads];
     }
+#pragma omp barrier
 
     for (i = iBegin; i < iEnd; ++i) {
       ret->rowptr[i] += rowPtrSum[tid];
