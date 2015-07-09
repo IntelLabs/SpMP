@@ -111,7 +111,7 @@ CSR::CSR(const char *file, bool forceSymmetric /*=false*/, int pad /*=1*/)
 
     alloc(Acoo.m, Acoo.nnz);
 
-    dcoo2crs(&Acoo, this);
+    dcoo2csr(&Acoo, this);
   }
 }
 
@@ -315,8 +315,6 @@ CSR *CSR::transpose() const
     assert(A_i[i + 1] >= A_i[i]);
   }
 #endif
-
-#define MIN(a, b) (((a) <= (b)) ? (a) : (b))
 
 #pragma omp parallel
    {

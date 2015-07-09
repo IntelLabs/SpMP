@@ -98,9 +98,9 @@ static void qsort(int *idx, T *w, int left, int right)
    if SORT_IN_ROW is defined, each row is sorted in column index.
 assume COO is one-based index */
 
-
-static void coo2csr(int n, int nz, double *a, int *i_idx, int *j_idx,
-       double *csr_a, int *col_idx, int *row_start)
+template<class T>
+void coo2csr(int n, int nz, const T *a, const int *i_idx, const int *j_idx,
+       T *csr_a, int *col_idx, int *row_start, bool sort)
 {
   int i, l;
 
@@ -127,19 +127,27 @@ static void coo2csr(int n, int nz, double *a, int *i_idx, int *j_idx,
 
   row_start[0] = 0;
 
+  if (sort) {
 #pragma omp parallel for
-  for (i=0; i<n; i++){
-    qsort (col_idx, csr_a, row_start[i], row_start[i+1] - 1);
-    assert(is_sorted(col_idx + row_start[i], col_idx + row_start[i+1]));
+    for (i=0; i<n; i++){
+      qsort (col_idx, csr_a, row_start[i], row_start[i+1] - 1);
+      assert(is_sorted(col_idx + row_start[i], col_idx + row_start[i+1]));
+    }
   }
 }
 
-void dcoo2crs(COO *Acoo, CSR *Acrs, bool createSeparateDiagData /*= true*/)
+void dcoo2csr(int n, int nz, const double *a, const int *i_idx, const int *j_idx,
+       double *csr_a, int *col_idx, int *row_start, bool sort/*=true*/)
+{
+  coo2csr(n, nz, a, i_idx, j_idx, csr_a, col_idx, row_start, sort);
+}
+
+void dcoo2csr(const COO *Acoo, CSR *Acrs, bool createSeparateDiagData /*= true*/)
 {
   Acrs->n=Acoo->n;
   Acrs->m=Acoo->m;
 
-  coo2csr(
+  dcoo2csr(
     Acrs->n, Acoo->nnz,
     Acoo->values, Acoo->rowidx, Acoo->colidx,
     Acrs->values, Acrs->colidx, Acrs->rowptr);
