@@ -49,9 +49,9 @@ void COO::dealloc()
   FREE(values);
 }
 
-void COO::store_matrix_market(char *file_name) const
+void COO::storeMatrixMarket(const char *fileName) const
 {
-  FILE *fp = fopen(file_name, "w");
+  FILE *fp = fopen(fileName, "w");
   assert(fp);
 
   MM_typecode matcode;
@@ -61,11 +61,11 @@ void COO::store_matrix_market(char *file_name) const
   mm_set_real(&matcode);
 
   int err = mm_write_mtx_crd(
-    file_name, m, n, nnz, rowidx, colidx, values, matcode);
+    (char *)fileName, m, n, nnz, rowidx, colidx, values, matcode);
   if (err) {
     fprintf(
       stderr,
-      "Fail to write matrix to %s (error code = %d)\n", file_name, err);
+      "Fail to write matrix to %s (error code = %d)\n", fileName, err);
     exit(-1);
   }
 }
@@ -178,7 +178,7 @@ void dcoo2csr(const COO *Acoo, CSR *Acrs, bool createSeparateDiagData /*= true*/
   }
 }
 
-void load_matrix_market (char *file, COO &coo, bool force_symmetric /*=false*/, int pad /*=1*/)
+void loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false*/, int pad /*=1*/)
 {
     FILE *fp=fopen(file, "r");
     if (NULL == fp) {
@@ -342,9 +342,6 @@ void load_matrix_market (char *file, COO &coo, bool force_symmetric /*=false*/, 
     coo.values = values;
     coo.colidx = colidx;
     coo.rowidx = rowidx;
-
-    const char *tag=(coo.isSymmetric?"symmetric":"general");
-    printf("%s:::%s m=%d n=%d nnz=%d\n", file, tag, coo.m, coo.n, coo.nnz);
 
     fclose(fp);
 }
