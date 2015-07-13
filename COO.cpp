@@ -163,15 +163,17 @@ void dcoo2csr(const COO *Acoo, CSR *Acrs, bool createSeparateDiagData /*= true*/
 //  mkl_dcsrcoo(&job[0], &(Acrs->n), Acrs->values, Acrs->colidx, Acrs->rowptr,
 //              &(Acrs->nnz), Acoo->values, Acoo->rowidx, Acoo->colidx, &info);
 
+  if (Acrs->diagptr) {
 #pragma omp parallel for
-  for (int i = 0; i < Acrs->m; ++i) {
-    for (int j = Acrs->rowptr[i]; j < Acrs->rowptr[i + 1]; ++j) {
-      if (Acrs->colidx[j] == i) {
-        Acrs->diagptr[i] = j;
+    for (int i = 0; i < Acrs->m; ++i) {
+      for (int j = Acrs->rowptr[i]; j < Acrs->rowptr[i + 1]; ++j) {
+        if (Acrs->colidx[j] == i) {
+          Acrs->diagptr[i] = j;
 
-        if (createSeparateDiagData) {
-          Acrs->idiag[i] = 1/Acrs->values[j];
-          Acrs->diag[i] = Acrs->values[j];
+          if (createSeparateDiagData) {
+            Acrs->idiag[i] = 1/Acrs->values[j];
+            Acrs->diag[i] = Acrs->values[j];
+          }
         }
       }
     }
