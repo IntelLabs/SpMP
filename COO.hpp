@@ -51,9 +51,11 @@ void loadMatrixMarket (const char *fileName, COO &Acoo, bool force_symmetric = f
 /**
  * @param createSeparateDiagData true then populate diag and idiag
  */
-void dcoo2csr(const COO *Acoo, CSR *Acrs, bool createSeparateDiagData = true);
+void dcoo2csr(CSR *Acrs, const COO *Acoo, bool createSeparateDiagData = true);
 void dcoo2csr(
-  int m, int nnz, const double *a, const int *i_idx, const int *j_idx,
-  double *csr_a, int *col_idx, int *row_start, bool sort = true);
+  int m, int nnz,
+  int *rowptr, int *colidx, double *values,
+  const int *cooRowidx, const int *cooColidx, const double *cooValues,
+  bool sort = true);
 
 } // namespace SpMP

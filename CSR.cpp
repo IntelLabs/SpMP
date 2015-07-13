@@ -114,7 +114,7 @@ CSR::CSR(const char *fileName, bool forceSymmetric /*=false*/, int pad /*=1*/)
 
     alloc(Acoo.m, Acoo.nnz);
 
-    dcoo2csr(&Acoo, this);
+    dcoo2csr(this, &Acoo);
   }
 }
 

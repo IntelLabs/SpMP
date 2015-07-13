@@ -99,58 +99,64 @@ static void qsort(int *idx, T *w, int left, int right)
 assume COO is one-based index */
 
 template<class T>
-void coo2csr(int n, int nz, const T *a, const int *i_idx, const int *j_idx,
-       T *csr_a, int *col_idx, int *row_start, bool sort)
+void coo2csr(
+  int n, int nnz,
+  int *rowptr, int *colidx, T *values,
+  const int *cooRowidx, const int *cooColidx, const T *cooValues,
+  bool sort)
 {
   int i, l;
 
 #pragma omp parallel for
-  for (i=0; i<=n; i++) row_start[i] = 0;
+  for (i=0; i<=n; i++) rowptr[i] = 0;
 
   /* determine row lengths */
-  for (i=0; i<nz; i++) row_start[i_idx[i]]++;
+  for (i=0; i<nnz; i++) rowptr[cooRowidx[i]]++;
 
 
-  for (i=0; i<n; i++) row_start[i+1] += row_start[i];
+  for (i=0; i<n; i++) rowptr[i+1] += rowptr[i];
 
 
   /* go through the structure  once more. Fill in output matrix. */
-  for (l=0; l<nz; l++){
-    i = row_start[i_idx[l] - 1];
-    csr_a[i] = a[l];
-    col_idx[i] = j_idx[l] - 1;
-    row_start[i_idx[l] - 1]++;
+  for (l=0; l<nnz; l++){
+    i = rowptr[cooRowidx[l] - 1];
+    values[i] = cooValues[l];
+    colidx[i] = cooColidx[l] - 1;
+    rowptr[cooRowidx[l] - 1]++;
   }
 
-  /* shift back row_start */
-  for (i=n; i>0; i--) row_start[i] = row_start[i-1];
+  /* shift back rowptr */
+  for (i=n; i>0; i--) rowptr[i] = rowptr[i-1];
 
-  row_start[0] = 0;
+  rowptr[0] = 0;
 
   if (sort) {
 #pragma omp parallel for
     for (i=0; i<n; i++){
-      qsort (col_idx, csr_a, row_start[i], row_start[i+1] - 1);
-      assert(is_sorted(col_idx + row_start[i], col_idx + row_start[i+1]));
+      qsort (colidx, values, rowptr[i], rowptr[i+1] - 1);
+      assert(is_sorted(colidx + rowptr[i], colidx + rowptr[i+1]));
     }
   }
 }
 
-void dcoo2csr(int n, int nz, const double *a, const int *i_idx, const int *j_idx,
-       double *csr_a, int *col_idx, int *row_start, bool sort/*=true*/)
+void dcoo2csr(
+  int m, int nnz,
+  int *rowptr, int *colidx, double *values,
+  const int *cooRowidx, const int *cooColidx, const double *cooValues,
+  bool sort /*=true*/)
 {
-  coo2csr(n, nz, a, i_idx, j_idx, csr_a, col_idx, row_start, sort);
+  coo2csr(m, nnz, rowptr, colidx, values, cooRowidx, cooColidx, cooValues, sort);
 }
 
-void dcoo2csr(const COO *Acoo, CSR *Acrs, bool createSeparateDiagData /*= true*/)
+void dcoo2csr(CSR *Acrs, const COO *Acoo, bool createSeparateDiagData /*= true*/)
 {
   Acrs->n=Acoo->n;
   Acrs->m=Acoo->m;
 
   dcoo2csr(
     Acrs->n, Acoo->nnz,
-    Acoo->values, Acoo->rowidx, Acoo->colidx,
-    Acrs->values, Acrs->colidx, Acrs->rowptr);
+    Acrs->rowptr, Acrs->colidx, Acrs->values,
+    Acoo->rowidx, Acoo->colidx, Acoo->values);
 
   if (Acrs->diagptr) {
     if (!Acrs->idiag || !Acrs->diag) {

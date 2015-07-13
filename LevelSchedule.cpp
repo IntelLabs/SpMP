@@ -89,7 +89,13 @@ LevelSchedule::LevelSchedule()
  : nparentsForward(NULL), nparentsBackward(NULL),
  parentsForward(NULL), parentsBackward(NULL),
  taskFinished(NULL),
- useMemoryPool(false), useBarrier(false)
+ useBarrier(false), transitiveReduction(true), fuseSpMV(false),
+#ifdef __MIC__
+ aggregateForVectorization(true),
+#else
+ aggregateForVectorization(false),
+#endif
+ useMemoryPool(false)
 {
   init_();
 }
@@ -126,16 +132,15 @@ void LevelSchedule::init_()
 #endif
 }
 
-void LevelSchedule::constructTaskGraph(
-  const CSR& A,
-  bool transitiveReduction,
-  bool fuseSpmv /* = false */)
+void LevelSchedule::constructTaskGraph(const CSR& A)
 {
-  constructTaskGraph(
-    A.m,
-    A.rowptr, A.diagptr, A.extptr,
-    A.colidx,
-    transitiveReduction, fuseSpmv);
+  constructTaskGraph(A, PrefixSumCostFunction(A.rowptr));
+}
+
+void LevelSchedule::constructTaskGraph(const CSR& A, const CostFunction& costFunction)
+{
+  assert(A.isSymmetric(false));
+  constructTaskGraph(A.m, A.rowptr, A.diagptr, A.extptr, A.colidx, costFunction);
 }
 
 static int *constructDiagPtr(
@@ -155,45 +160,31 @@ static int *constructDiagPtr(
 }
 
 void LevelSchedule::constructTaskGraph(
-  int m,
-  const int *rowptr, const int *colidx,
-  bool transitiveReduction,
-  bool fuseSpmv /* = false */)
+  int m, const int *rowptr, const int *colidx, const CostFunction& costFunction)
 {
   int *diagptr = constructDiagPtr(m, rowptr, colidx);
 
-  constructTaskGraph(
-    m,
-    rowptr, diagptr, NULL,
-    colidx,
-    transitiveReduction, fuseSpmv);
+  constructTaskGraph(m, rowptr, diagptr, NULL, colidx, costFunction);
 
   FREE(diagptr);
 }
 
 void LevelSchedule::constructTaskGraph(
-  int m,
-  const int *rowptr, const int *diagptr,
-  const int *colidx,
-  bool transitiveReduction,
-  bool fuseSpmv /* = false */)
+  int m, const int *rowptr, const int *diagptr, const int *colidx,
+  const CostFunction& costFunction)
 {
-  constructTaskGraph(
-    m,
-    rowptr, diagptr, NULL,
-    colidx,
-    transitiveReduction, fuseSpmv);
+  constructTaskGraph(m, rowptr, diagptr, NULL, colidx, costFunction);
 }
 
 #define NUM_MAX_THREADS (2048)
 
 void LevelSchedule::constructTaskGraph(
   int m,
-  const int *rowptr, const int *diagptr, const int *extptr,
-  const int *colidx,
-  bool transitiveReduction,
-  bool fuseSpmv /* = false */)
+  const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
+  const CostFunction& costFunction)
 {
+  findLevels(m, rowptr, diagptr, extptr, colidx, costFunction);
+
   if (NULL == extptr) {
     extptr = rowptr + 1;
   }
@@ -494,7 +485,7 @@ void LevelSchedule::constructTaskGraph(
 
 #ifdef _OPENMP
   // construct FusedGSAndSpMVSchedule
-  if (fuseSpmv) {
+  if (fuseSpMV) {
 #pragma omp barrier
 #pragma omp single // FIXME - parallelize this
     {
@@ -1355,34 +1346,6 @@ void findLevels_(
   assert(isPerm(reversePerm, m));
 }
 
-void LevelSchedule::findLevels(const CSR& A)
-{
-  findLevels(A, PrefixSumCostFunction(A.rowptr));
-}
-
-void LevelSchedule::findLevels(
-  const CSR& A, const CostFunction& costFunction)
-{
-  assert(A.isSymmetric(false));
-  findLevels(A.m, A.rowptr, A.diagptr, A.extptr, A.colidx, costFunction);
-}
-
-void LevelSchedule::findLevels(
-  int m, const int *rowptr, const int *colidx,
-  const CostFunction& costFunction)
-{
-  int *diagptr = constructDiagPtr(m, rowptr, colidx);
-  findLevels(m, rowptr, diagptr, NULL, colidx, costFunction);
-  FREE(diagptr);
-}
-
-void LevelSchedule::findLevels(
-  int m, const int *rowptr, const int *diagptr, const int *colidx,
-  const CostFunction& costFunction)
-{
-  findLevels(m, rowptr, diagptr, NULL, colidx, costFunction);
-}
-
 // This routine doesn't depend on that colidx of each row is fully sorted.
 // It only needs to be partially sorted that those smaller than its row index
 // appear before diagptr, those larger than # of rows appear after extptr,
@@ -1560,17 +1523,18 @@ void LevelSchedule::findLevels(
     int t;
     for (t = 0; t < nthreads; ++t) {
       int newr = lower_bound(&b[r], &b[levelEnd], (t + 1)*nnzPerThread) - &b[0];
-#if defined(__MIC__) || defined(__AVX512F__)
-      // make task size a multiple of 8 as much as possible
-      if (0 == t) {
-        r = min(r + (newr - r + 7)/8*8, levelEnd);
+      if (aggregateForVectorization) {
+        // make task size a multiple of 8 as much as possible
+        if (0 == t) {
+          r = min(r + (newr - r + 7)/8*8, levelEnd);
+        }
+        else {
+          r = min(r - 1 + (newr - r + 1 + 7)/8*8, levelEnd);
+        }
       }
       else {
-        r = min(r - 1 + (newr - r + 1 + 7)/8*8, levelEnd);
+        r = newr;
       }
-#else
-      r = newr;
-#endif
       //for ( ; r < levelEnd && nnz < (t + 1)*nnzPerThread; r++) {
         //nnz += L.rowptr[reversePerm[r] + 1] - L.rowptr[reversePerm[r]];
       //}
@@ -1581,9 +1545,7 @@ void LevelSchedule::findLevels(
       prevEnd = end;
 
       taskRows[t*(levIndices.size() - 1) + l] = make_pair(begin, end);
-#if defined(__MIC__) || defined(__AVX512F__)
-      if (end >= levelEnd) break;
-#endif
+      if (aggregateForVectorization && end >= levelEnd) break;
 
       //printf("(%d, %d) (%d, %d) (%d, %d)\n", l, t, begin, end, levelBegin, levelEnd);
       //if (r < levelEnd)
@@ -1591,21 +1553,21 @@ void LevelSchedule::findLevels(
       ++r; // make sure first threads execute some tasks -> improve locality
     } // for each thread
 
-#if defined(__MIC__) || defined(__AVX512F__)
-    // shift tasks to the last threads so that earlier threads
-    // have tasks whose number of rows is a multiple of 8.
+    if (aggregateForVectorization) {
+      // shift tasks to the last threads so that earlier threads
+      // have tasks whose number of rows is a multiple of 8.
 
-    // we have (t + 1) non-empty tasks in this level
-    // copy [0, t] to [nthreads - 1 - t, nthreads - 1]
-    for (int i = t; i >= 0; --i) {
-      taskRows[(nthreads - 1 - t + i)*(levIndices.size() - 1) + l] =
-        taskRows[i*(levIndices.size() - 1) + l];
+      // we have (t + 1) non-empty tasks in this level
+      // copy [0, t] to [nthreads - 1 - t, nthreads - 1]
+      for (int i = t; i >= 0; --i) {
+        taskRows[(nthreads - 1 - t + i)*(levIndices.size() - 1) + l] =
+          taskRows[i*(levIndices.size() - 1) + l];
+      }
+      // fill [0, nthreads - 1 - t) empty
+      for (int i = 0; i < nthreads - t - 1; ++i) {
+        taskRows[i*(levIndices.size() - 1) + l] = make_pair(levelBegin, levelBegin);
+      }
     }
-    // fill [0, nthreads - 1 - t) empty
-    for (int i = 0; i < nthreads - t - 1; ++i) {
-      taskRows[i*(levIndices.size() - 1) + l] = make_pair(levelBegin, levelBegin);
-    }
-#endif
   } // for each level
 
   if (useMemoryPool) {

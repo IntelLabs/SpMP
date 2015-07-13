@@ -167,36 +167,16 @@ public :
 
   int *parentsBuf[2];
 
-  bool useBarrier;
+  // options
+  bool useBarrier; // default: false
+  bool transitiveReduction; // default: true
+  bool fuseSpMV; // default: false
+  bool aggregateForVectorization; // default: false in Xeon, true in Xeon Phi
+
   bool useMemoryPool;
 
   FusedGSAndSpMVSchedule *fusedSchedule;
 
-  /**
-   * Find levels and partition each level.
-   * 
-   * @param A the matrix
-   * @param forSmoothing false load balancing for triangular solver
-   *                     true load balancing for GS smoothing
-   *
-   * Assumptions:
-   *  1. colidx of each row is partially sorted that
-   *  lower triangular elements appear before diagptr and
-   *  upper triangular elements appear after diagptr.
-   *  2. symmetric non-zero pattern.
-   *  Need this to have the same dependency graph for fwd/bwd solvers
-   *  Need this to efficiently access outgoing edges w/o transpose
-   *  If the input matrix is not structurally symmetric, compute
-   *  A+A^T and pass it to this function.
-   *
-   * Modifies levIndicesForward/Backward,
-   * levContToOrigPermForward/Backward,
-   * origToThreadContPermForward/Backward,
-   * threadContToOrigPermForward/Backward,
-   * threadBoundariesForward/Backward,
-   * taskBoundariesForward/Backward,
-   * threadContBackwardToThreadContForwardPerm
-   */
   void findLevels(const CSR& A);
 
   void findLevels(const CSR& A, const CostFunction& costFunction);
@@ -219,6 +199,55 @@ public :
     const CostFunction& costFunction);
 
   /**
+   * Find levels and partition each level.
+   * Remove intra-thread, duplicated, and transitive edges
+   * Load balancing based on the num of non-zeros
+   * using PrefixSumCostFunction(rowptr) cost function.
+   *
+   * @params A the matrix
+   *
+   * Assumptions:
+   *  1. colidx of each row is partially sorted that
+   *  lower triangular elements appear before diagptr and
+   *  upper triangular elements appear after diagptr.
+   *  2. symmetric non-zero pattern.
+   *  Need this to have the same dependency graph for fwd/bwd solvers
+   *  Need this to efficiently access outgoing edges w/o transpose
+   *  If the input matrix is not structurally symmetric, compute
+   *  A+A^T and pass it to this function.
+   */
+  void constructTaskGraph(const CSR& A);
+
+  void constructTaskGraph(const CSR& A, const CostFunction& costFunction);
+
+  /**
+   * constructTaskGraph version that is not dependent on CSR type
+   */
+  void constructTaskGraph(
+    int m, const int *rowptr, const int *colidx,
+    const CostFunction& costFunction);
+
+  /**
+   * @params diagptr points to the index where the diag elem of each row locates
+   *
+   * @note in each row, lower diagonal values should appear before diag and
+   *       upper diagonal values should appear after diag.
+   */
+  void constructTaskGraph(
+    int m,
+    const int *rowptr, const int *diagptr, const int *colidx,
+    const CostFunction& costFuction);
+
+  /**
+   * constructTaskGraph version that supports a matrix distributed over multiple MPI nodes
+   */
+  void constructTaskGraph(
+    int m,
+    const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
+    const CostFunction& costFunction);
+
+protected:
+  /**
    * findLevels version that supports a matrix distributed over multiple MPI nodes
    */
   void findLevels(
@@ -226,47 +255,6 @@ public :
     const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
     const CostFunction& costFunction);
 
-  /**
-   * Remove intra-thread, duplicated, and transitive edges
-   *
-   * @params A the matrix
-   * @params transitiveReduction remove transitive edges
-   *
-   * Modifies childrenForward/Backward,
-   * numOfChildrenForward/Backward,
-   * nparentsForward/Backward,
-   * nparentsInitForward/Backward,
-   * ntasks
-   */
-  void constructTaskGraph(
-    const CSR& A,
-    bool transitiveReduction = true,
-    bool fuseSpmv = false);
-
-  /**
-   * constructTaskGraph version that is not dependent on crs_t type
-   */
-  void constructTaskGraph(
-    int m,
-    const int *rowptr, const int *colidx,
-    bool transitiveReduction = true,
-    bool fuseSpmv = false);
-
-  void constructTaskGraph(
-    int m,
-    const int *rowptr, const int *diagptr,
-    const int *colidx,
-    bool transitiveReduction = true,
-    bool fuseSpmv = false);
-
-  void constructTaskGraph(
-    int m,
-    const int *rowptr, const int *diagptr, const int *extptr,
-    const int *colidx,
-    bool transitiveReduction = true,
-    bool fuseSpmv = false);
-
-protected:
   template<class T> T *allocate(size_t n)
   {
     if (useMemoryPool) {
