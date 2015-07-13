@@ -72,8 +72,6 @@ fwd_p2p_perm               6.91 gflops   41.86 gbps
 bwd_p2p_perm               5.82 gflops   35.26 gbps
 fwd_p2p_tr_red_perm        8.01 gflops   48.49 gbps
 bwd_p2p_tr_red_perm        7.22 gflops   43.74 gbps
-fwd_mkl                    2.11 gflops   12.76 gbps
-bwd_mkl                    2.04 gflops   12.33 gbps
  */
 
 #include <cassert>
@@ -484,22 +482,15 @@ int main(int argc, char **argv)
 
   LevelSchedule *barrierSchedule = new LevelSchedule;
   barrierSchedule->useBarrier = true;
-  barrierSchedule->findLevels(*A);
-  barrierSchedule->constructTaskGraph(
-    *A,
-    false); // !transitiveReduction
+  barrierSchedule->transitiveReduction = false;
+  barrierSchedule->constructTaskGraph(*A);
 
   LevelSchedule *p2pSchedule = new LevelSchedule;
-  p2pSchedule->findLevels(*A);
-  p2pSchedule->constructTaskGraph(
-    *A,
-    false); // !transitiveReduction
+  p2pSchedule->transitiveReduction = false;
+  p2pSchedule->constructTaskGraph(*A);
 
   LevelSchedule *p2pScheduleWithTransitiveReduction = new LevelSchedule;
-  p2pScheduleWithTransitiveReduction->findLevels(*A);
-  p2pScheduleWithTransitiveReduction->constructTaskGraph(
-    *A,
-    true); // transitiveReduction
+  p2pScheduleWithTransitiveReduction->constructTaskGraph(*A);
 
   printf("parallelism %f\n", (double)A->m/(barrierSchedule->levIndices.size() - 1));
   assert(barrierSchedule->levIndices.size() == p2pSchedule->levIndices.size());

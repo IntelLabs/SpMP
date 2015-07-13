@@ -476,22 +476,15 @@ int main(int argc, char **argv)
 
   LevelSchedule *barrierSchedule = new LevelSchedule;
   barrierSchedule->useBarrier = true;
-  barrierSchedule->findLevels(*A);
-  barrierSchedule->constructTaskGraph(
-    *A,
-    false); // !transitiveReduction
+  barrierSchedule->transitiveReduction = false;
+  barrierSchedule->constructTaskGraph(*A);
 
   LevelSchedule *p2pSchedule = new LevelSchedule;
-  p2pSchedule->findLevels(*A);
-  p2pSchedule->constructTaskGraph(
-    *A,
-    false); // !transitiveReduction
+  p2pSchedule->transitiveReduction = false;
+  p2pSchedule->constructTaskGraph(*A);
 
   LevelSchedule *p2pScheduleWithTransitiveReduction = new LevelSchedule;
-  p2pScheduleWithTransitiveReduction->findLevels(*A);
-  p2pScheduleWithTransitiveReduction->constructTaskGraph(
-    *A,
-    true); // transitiveReduction
+  p2pScheduleWithTransitiveReduction->constructTaskGraph(*A);
 
   printf("parallelism %f\n", (double)A->m/(barrierSchedule->levIndices.size() - 1));
   assert(barrierSchedule->levIndices.size() == p2pSchedule->levIndices.size());
