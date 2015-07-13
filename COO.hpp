@@ -43,10 +43,10 @@ public:
   ~COO();
   void dealloc();
 
-  void store_matrix_market(char *file_name) const;
+  void storeMatrixMarket(const char *fileName) const;
 };
 
-void load_matrix_market (char *file, COO &Acoo, bool force_symmetric = false, int pad = 1);
+void loadMatrixMarket (const char *fileName, COO &Acoo, bool force_symmetric = false, int pad = 1);
 
 /**
  * @param createSeparateDiagData true then populate diag and idiag

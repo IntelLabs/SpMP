@@ -93,21 +93,24 @@ CSR::CSR(int m, int n, int nnz, int base /*=0*/)
   alloc(n, nnz);
 }
 
-CSR::CSR(const char *file, bool forceSymmetric /*=false*/, int pad /*=1*/)
+CSR::CSR(const char *fileName, bool forceSymmetric /*=false*/, int pad /*=1*/)
  : base(0), rowptr(NULL), colidx(NULL), values(NULL), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL)
 {
-  int m = atoi(file);
+  int m = atoi(fileName);
   char buf[1024];
   sprintf(buf, "%d", m);
 
-  int l = strlen(file);
+  int l = strlen(fileName);
 
-  if (!strcmp(buf, file)) {
+  if (!strcmp(buf, fileName)) {
     generate3D27PtLaplacian(this, m);
+  }
+  else if (l > 4 && !strcmp(fileName + l - 4, ".bin")) {
+    loadBin(fileName);
   }
   else {
     COO Acoo;
-    load_matrix_market((char *)file, Acoo, forceSymmetric, pad);
+    loadMatrixMarket((char *)fileName, Acoo, forceSymmetric, pad);
 
     alloc(Acoo.m, Acoo.nnz);
 
@@ -198,9 +201,9 @@ bool CSR::isSymmetric(bool checkValues /*=true*/, bool printFirstNonSymmetry /* 
   return true;
 }
 
-void CSR::store_matrix_market(const char *file_name) const
+void CSR::storeMatrixMarket(const char *fileName) const
 {
-  FILE *fp = fopen(file_name, "w");
+  FILE *fp = fopen(fileName, "w");
   assert(fp);
 
   MM_typecode matcode;
@@ -222,6 +225,83 @@ void CSR::store_matrix_market(const char *file_name) const
       fprintf(fp, "%d %d %20.16g\n", i + 1, colidx[j] + 1, values[j]);
     }
   }
+
+  fclose(fp);
+}
+
+static const int MAT_FILE_CLASSID = 1211216;
+
+void CSR::loadBin(const char *file_name)
+{
+  dealloc();
+ 
+  FILE *fp = fopen(file_name, "r");
+  if (!fp) {
+    fprintf(stderr, "Failed to open %s\n", file_name);
+    return;
+  }
+ 
+  int id;
+  fread(&id, sizeof(id), 1, fp);
+  if (MAT_FILE_CLASSID != id) {
+    fprintf(stderr, "Wrong file ID (%d)\n", id);
+  }
+ 
+  fread(&m, sizeof(m), 1, fp);
+  fread(&n, sizeof(n), 1, fp);
+  int nnz;
+  fread(&nnz, sizeof(nnz), 1, fp);
+ 
+  alloc(m, nnz);
+ 
+  fread(rowptr + 1, sizeof(rowptr[0]), m, fp);
+  rowptr[0] = 0;
+  for (int i = 1; i < m; ++i) {
+    rowptr[i + 1] += rowptr[i];
+  }
+ 
+  fread(colidx, sizeof(colidx[0]), nnz, fp);
+  fread(values, sizeof(values[0]), nnz, fp);
+ 
+#pragma omp parallel for
+  for (int i = 0; i < m; ++i) {
+    for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+      if (colidx[j] == i) {
+        diagptr[i] = j;
+        diag[i] = values[j];
+        idiag[i] = 1/values[j];
+      }
+    }
+  }
+ 
+  fclose(fp);
+}
+
+void CSR::storeBin(const char *fileName) const
+{
+  FILE *fp = fopen(fileName, "w");
+  if (!fp) {
+    fprintf(stderr, "Failed to open %s\n", fileName);
+    return;
+  }
+
+  int id = MAT_FILE_CLASSID;
+  fwrite(&id, sizeof(id), 1, fp);
+
+  fwrite(&m, sizeof(m), 1, fp);
+  fwrite(&n, sizeof(n), 1, fp);
+  int nnz = rowptr[m];
+  fwrite(&nnz, sizeof(nnz), 1, fp);
+
+  int *rownnz = (int *)malloc(sizeof(int)*m);
+  for (int i = 0; i < m; ++i) {
+    rownnz[i] = rowptr[i + 1] - rowptr[i];
+  }
+  fwrite(rownnz, sizeof(rownnz[0]), m, fp);
+  free(rownnz);
+
+  fwrite(colidx, sizeof(colidx[0]), nnz, fp);
+  fwrite(values, sizeof(values[0]), nnz, fp);
 
   fclose(fp);
 }
@@ -446,6 +526,40 @@ int CSR::getBandwidth() const
     assert(1 == base);
     return getBandwidth_<1>(this);
   }
+}
+
+bool CSR::equals(const CSR& A, bool print /*=false*/) const
+{
+  if (m != A.m) {
+    printf("number of rows differs %d vs. %d\n", m, A.m);
+    return false;
+  }
+  if (n != A.n) {
+    printf("number of columns differs %d vs. %d\n", n, A.n);
+    return false;
+  }
+  if (rowptr[m] != A.rowptr[A.m]) {
+    printf("number of non-zeros differs %d vs. %d\n", rowptr[m], A.rowptr[A.m]);
+    return false;
+  }
+  for (int i = 0; i < m; ++i) {
+    if (rowptr[i] != A.rowptr[i]) {
+      printf("rowptr[%d] differs %d vs. %d\n", i, rowptr[i], A.rowptr[i]);
+      return false;
+    }
+    for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+      if (colidx[j] != A.colidx[j]) {
+        printf("colidx[%d:%d] differs %d vs. %d\n", i, j, colidx[j], A.colidx[j]);
+        return false;
+      }
+      if (values[j] != A.values[j]) {
+        printf("values[%d:%d] differs %g vs. %g\n", i, j, values[j], A.values[j]);
+        return false;
+      }
+    }
+  } // for each row
+
+  return true;
 }
 
 } // namespace SpMP

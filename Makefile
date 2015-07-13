@@ -52,6 +52,9 @@ test/trsv_test: test/trsv_test.o $(LIBRARY)
 test/reordering_test: test/reordering_test.o $(LIBRARY)
 	$(CC) $(CCFLAGS) -o $@ $^
 
+test/mtx2bin: test/mtx2bin.o $(LIBRARY)
+	$(CC) $(CCFLAGS) -o $@ $^
+
 %.o: %.cpp
 	$(CC) $(CCFLAGS) -fPIC -c $< -o $@
 

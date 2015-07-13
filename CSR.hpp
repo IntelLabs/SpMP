@@ -62,7 +62,15 @@ public:
  
   ~CSR();
 
-  void store_matrix_market(const char *file_name) const;
+  void storeMatrixMarket(const char *fileName) const;
+  /**
+   * Load PETSc bin format
+   */
+  void loadBin(const char *fileName);
+  /**
+   * Load PETSc bin format
+   */
+  void storeBin(const char *fileName) const;
 
   /**
    * permutes current matrix based on permutation vector "perm"
@@ -134,6 +142,7 @@ public:
   bool useMemoryPool_() const;
 
   int getBandwidth() const;
+  bool equals(const CSR& A, bool print = false) const;
 
   template<class T> T *allocate_(size_t n) const
   {
