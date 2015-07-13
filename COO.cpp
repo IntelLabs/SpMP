@@ -152,18 +152,10 @@ void dcoo2csr(const COO *Acoo, CSR *Acrs, bool createSeparateDiagData /*= true*/
     Acoo->values, Acoo->rowidx, Acoo->colidx,
     Acrs->values, Acrs->colidx, Acrs->rowptr);
 
-//  int job[8];
-//  job[0]=2; // COO->CSR and column indicies are sorted
-//  job[1]=0; // zero-based indexing for CSR
-//  job[2]=1; // one-based indexing for COO
-//  job[4]=Acoo->nnz;
-//  job[5]=0;
-//
-//  int info;
-//  mkl_dcsrcoo(&job[0], &(Acrs->n), Acrs->values, Acrs->colidx, Acrs->rowptr,
-//              &(Acrs->nnz), Acoo->values, Acoo->rowidx, Acoo->colidx, &info);
-
   if (Acrs->diagptr) {
+    if (!Acrs->idiag || !Acrs->diag) {
+      createSeparateDiagData = false;
+    }
 #pragma omp parallel for
     for (int i = 0; i < Acrs->m; ++i) {
       for (int j = Acrs->rowptr[i]; j < Acrs->rowptr[i + 1]; ++j) {
