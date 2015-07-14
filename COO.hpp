@@ -46,7 +46,10 @@ public:
   void storeMatrixMarket(const char *fileName) const;
 };
 
-void loadMatrixMarket (const char *fileName, COO &Acoo, bool force_symmetric = false, int pad = 1);
+/**
+ * @ret true if succeed
+ */
+bool loadMatrixMarket (const char *fileName, COO &Acoo, bool force_symmetric = false, int pad = 1);
 
 /**
  * @param createSeparateDiagData true then populate diag and idiag

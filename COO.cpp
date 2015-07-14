@@ -178,119 +178,108 @@ void dcoo2csr(CSR *Acrs, const COO *Acoo, bool createSeparateDiagData /*= true*/
   }
 }
 
-void loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false*/, int pad /*=1*/)
+bool loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false*/, int pad /*=1*/)
 {
-    FILE *fp=fopen(file, "r");
-    if (NULL == fp) {
-      fprintf(stderr, "Failed to open file %s\n", file);
-      exit(-1);
+  FILE *fp=fopen(file, "r");
+  if (NULL == fp) {
+    fprintf(stderr, "Failed to open file %s\n", file);
+    exit(-1);
+  }
+
+  // read banner
+  MM_typecode matcode;
+  if (mm_read_banner (fp, &matcode) != 0) {
+    fprintf(stderr, "Error: could not process Matrix Market banner.\n");
+    return false;
+  }
+
+  if (!mm_is_valid (matcode) &&
+       (mm_is_array (matcode) || mm_is_dense (matcode)) ) {
+    fprintf(stderr, "Error: only support sparse and real matrices.\n");
+    return false;
+  }
+  bool pattern = mm_is_pattern (matcode);
+
+  // read sizes
+  int m, n;
+  int nnz; // # of non-zeros specified in the file
+  if (mm_read_mtx_crd_size(fp, &m, &n, &nnz) !=0) {
+    fprintf(stderr, "Error: could not read matrix size.\n");
+    return false;
+  }
+
+  int origM = m, origN = n;
+  m = (m + pad - 1)/pad*pad;
+  n = (n + pad - 1)/pad*pad;
+  if (m != n) {
+    fprintf(stderr, "Error: only support square matrices.\n");
+    return false;
+  }
+
+  size_t count;
+  if (force_symmetric || mm_is_symmetric (matcode) == 1) {
+    coo.isSymmetric = true;
+    count = 2L*nnz;
+  }
+  else {
+    count = nnz;
+  }
+
+  // allocate memory
+  size_t extraCount = min(m, n) - min(origM, origN);
+  double *values = MALLOC(double, count + extraCount);
+  int *colidx = MALLOC(int, count + extraCount);
+  int *rowidx = MALLOC(int, count + extraCount);
+  if (!values || !colidx || !rowidx) {
+    fprintf(stderr, "Failed to allocate memory\n");
+    return false;
+  }
+
+  int *colidx_temp, *rowcnt;
+  if (coo.isSymmetric) {
+    colidx_temp = MALLOC(int, count);
+    rowcnt = MALLOC(int, m + 1);
+    memset(rowcnt, 0, sizeof(int)*(m + 1));
+    if (!colidx_temp || !rowcnt) {
+      fprintf(stderr, "Failed to allocate memory\n");
+      return false;
     }
-    MM_typecode matcode;
-    int m;
-    int n;
-    int nnz;
-    int x;
-    int y;
-    double value;
-    size_t count;
-    int pattern;
-    int i;
-    int *colidx;
-    int *rowidx;
-    double *values;
-    int lines;
+  }
 
-    if (mm_read_banner (fp, &matcode) != 0)
-    {
-        printf ("Error: could not process Matrix Market banner.\n");
-        exit(1);
-    }
-
-    if ( !mm_is_valid (matcode) &&
-         (mm_is_array (matcode) ||
-          mm_is_dense (matcode)) )
-    {
-        printf ("Error: only support sparse and real matrices.\n");
-        exit(1);
-    }
-
-    if (mm_read_mtx_crd_size(fp, &m, &n, &nnz) !=0)
-    {
-        printf ("Error: could not read matrix size.\n");
-        exit(1);
-
-    }
-    int origM = m, origN = n;
-    m = (m + pad - 1)/pad*pad;
-    n = (n + pad - 1)/pad*pad;
-    assert(m==n);
-
-    if (force_symmetric || mm_is_symmetric (matcode) == 1)
-    {
-        coo.isSymmetric = true;
-        count = 2L*nnz;
-    }
-    else
-    {
-        count = nnz;
-    }
-
-    coo.m = m;
-    coo.n = n;
-    size_t extraCount = min(m, n) - min(origM, origN);
-    values = MALLOC(double, count + extraCount);
-    colidx = MALLOC(int, count + extraCount);
-    rowidx = MALLOC(int, count + extraCount);
-    assert (values != NULL);
-    assert (colidx != NULL);
-    assert (rowidx != NULL);
-
-    int *colidx_temp, *rowcnt;
-    if (coo.isSymmetric) {
-      colidx_temp = MALLOC(int, count);
-      rowcnt = MALLOC(int, m);
-      memset(rowcnt, 0, sizeof(int)*m);
-      assert(colidx_temp != NULL);
-      assert(rowcnt != NULL);
-    }
-
-    count = 0;
-    lines = 0;
-    pattern = mm_is_pattern (matcode);
-    int x_o=1, y_o;
-    double imag;
-    while (mm_read_mtx_crd_entry (fp, &x, &y, &value, &imag, matcode) == 0)
-    {
-        rowidx[count] = x;
-        colidx[count] = y;
-
-        if (x > origM || y > origN)
-        {
-            printf ("Error: (%d %d) coordinate is out of range.\n", x, y);
-            exit(1);
-        }
-        if (pattern == 1)
-        {
-            values[count] = 1;//RAND01();
-        }
-        else
-        {
-            values[count] = (double)value;
-        }
-
-        count++;
-        lines++;
-        if (coo.isSymmetric) rowcnt[x]++;
-    }
-    for (int i = min(origM, origN); i < min(m, n); ++i) {
-      rowidx[count] = i + 1;
-      colidx[count] = i + 1;
-      values[count] = 1;
-      ++count;
+  // read values
+  count = 0;
+  int lines = 0;
+  int x, y;
+  double real, imag;
+  while (mm_read_mtx_crd_entry (fp, &x, &y, &real, &imag, matcode) == 0) {
+    if (x > origM || y > origN) {
+      fprintf(stderr, "Error: (%d %d) coordinate is out of range.\n", x, y);
+      return false;
     }
 
-    assert (lines == nnz);
+    rowidx[count] = x;
+    colidx[count] = y;
+    values[count] = pattern ? 1 : real;
 
+    ++count;
+    ++lines;
+    if (coo.isSymmetric) rowcnt[x]++;
+      // this is not a bug. we're intentionally indexing rowcnt[x] instead of rowcnt[x-1]
+  }
+  // padding for vectorization
+  for (int i = min(origM, origN); i < min(m, n); ++i) {
+    rowidx[count] = i + 1;
+    colidx[count] = i + 1;
+    values[count] = 1;
+    ++count;
+  }
+  fclose(fp);
+
+  if (lines != nnz) {
+    fprintf(stderr, "Error: nnz specified in the header doesn't match with # of lines\n");
+    return false;
+  }
+    
   if (coo.isSymmetric) {
     // add transposed elements only if it doesn't exist
     size_t real_count = count;
@@ -326,24 +315,20 @@ void loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false
       }
     }
     count = real_count;
+
+    FREE(rowcnt);
+    FREE(colidx_temp);
   }
-  nnz = count;
 
-    //printf("count=%d trc=%d\n", count, trc+m);
-    nnz = count;
+  coo.m = m;
+  coo.n = n;
+  coo.nnz = count;
+  coo.dealloc();
+  coo.values = values;
+  coo.colidx = colidx;
+  coo.rowidx = rowidx;
 
-    if (coo.isSymmetric) {
-      FREE(rowcnt);
-      FREE(colidx_temp);
-    }
-
-    coo.nnz = nnz;
-    coo.dealloc();
-    coo.values = values;
-    coo.colidx = colidx;
-    coo.rowidx = rowidx;
-
-    fclose(fp);
+  return true;
 }
 
 } // namespace SpMP
