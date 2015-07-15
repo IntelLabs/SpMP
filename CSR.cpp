@@ -531,29 +531,29 @@ int CSR::getBandwidth() const
 bool CSR::equals(const CSR& A, bool print /*=false*/) const
 {
   if (m != A.m) {
-    printf("number of rows differs %d vs. %d\n", m, A.m);
+    if (print) printf("number of rows differs %d vs. %d\n", m, A.m);
     return false;
   }
   if (n != A.n) {
-    printf("number of columns differs %d vs. %d\n", n, A.n);
+    if (print) printf("number of columns differs %d vs. %d\n", n, A.n);
     return false;
   }
   if (rowptr[m] != A.rowptr[A.m]) {
-    printf("number of non-zeros differs %d vs. %d\n", rowptr[m], A.rowptr[A.m]);
+    if (print) printf("number of non-zeros differs %d vs. %d\n", rowptr[m], A.rowptr[A.m]);
     return false;
   }
   for (int i = 0; i < m; ++i) {
     if (rowptr[i] != A.rowptr[i]) {
-      printf("rowptr[%d] differs %d vs. %d\n", i, rowptr[i], A.rowptr[i]);
+      if (print) printf("rowptr[%d] differs %d vs. %d\n", i, rowptr[i], A.rowptr[i]);
       return false;
     }
     for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
       if (colidx[j] != A.colidx[j]) {
-        printf("colidx[%d:%d] differs %d vs. %d\n", i, j, colidx[j], A.colidx[j]);
+        if (print) printf("colidx[%d:%d] differs %d vs. %d\n", i, j, colidx[j], A.colidx[j]);
         return false;
       }
       if (values[j] != A.values[j]) {
-        printf("values[%d:%d] differs %g vs. %g\n", i, j, values[j], A.values[j]);
+        if (print) printf("values[%d:%d] differs %g vs. %g\n", i, j, values[j], A.values[j]);
         return false;
       }
     }
