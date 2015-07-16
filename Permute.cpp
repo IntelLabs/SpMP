@@ -117,7 +117,7 @@ CSR *CSR::permuteRowptr(const int *reversePerm) const
 }
 
 template<class T, int BASE = 0>
-void permuteColsInplace_(CSR *A, const int *perm)
+void permuteColsInPlace_(CSR *A, const int *perm)
 {
   assert(perm);
 
@@ -167,14 +167,14 @@ void permuteColsInplace_(CSR *A, const int *perm)
   } // for each row
 }
 
-void CSR::permuteColsInplace(const int *perm)
+void CSR::permuteColsInPlace(const int *perm)
 {
   if (0 == base) {
-    permuteColsInplace_<double, 0>(this, perm);
+    permuteColsInPlace_<double, 0>(this, perm);
   }
   else {
     assert(1 == base);
-    permuteColsInplace_<double, 1>(this, perm);
+    permuteColsInPlace_<double, 1>(this, perm);
   }
 }
 

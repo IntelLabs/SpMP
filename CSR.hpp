@@ -89,8 +89,8 @@ public:
   CSR *permuteRowptr(const int *inversePerm) const;
   void permuteRowptr(CSR *out, const int *inversePerm) const;
 
-  void permuteColsInplace(const int *perm);
-  void permuteInplaceIgnoringExtptr(const int *perm);
+  void permuteColsInPlace(const int *perm);
+  void permuteInPlaceIgnoringExtptr(const int *perm);
 
   /**
    * assuming rowptr is permuted, permute the remaining (colidx and values)
