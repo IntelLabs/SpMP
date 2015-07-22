@@ -71,6 +71,14 @@ bool isPerm(const int *perm, int n)
   return true;
 }
 
+bool isInversePerm(const int *perm, const int *inversePerm, int len)
+{
+  for (int i = 0; i < len; ++i) {
+    if (inversePerm[perm[i]] != i) return false;
+  }
+  return true;
+}
+
 template<class T>
 void CopyVector(T *dst, const T *src, int len)
 {
@@ -80,7 +88,8 @@ void CopyVector(T *dst, const T *src, int len)
   }
 }
 
-void reorderVectorOutOfPlace(double *dst, const double *src, const int *perm, int len)
+template<class T>
+void reorderVectorOutOfPlace_(T *dst, const T *src, const int *perm, int len)
 {
   if (perm) {
 #pragma omp parallel for
@@ -94,7 +103,18 @@ void reorderVectorOutOfPlace(double *dst, const double *src, const int *perm, in
   }
 }
 
-void reorderVectorOutOfPlaceWithInversePerm(double *dst, const double *src, const int *inversePerm, int len)
+void reorderVectorOutOfPlace(double *dst, const double *src, const int *perm, int len)
+{
+  return reorderVectorOutOfPlace_(dst, src, perm, len);
+}
+
+void reorderVectorOutOfPlace(int *dst, const int *src, const int *perm, int len)
+{
+  return reorderVectorOutOfPlace_(dst, src, perm, len);
+}
+
+template<class T>
+void reorderVectorOutOfPlaceWithInversePerm_(T *dst, const T *src, const int *inversePerm, int len)
 {
   if (inversePerm) {
 #pragma omp parallel for
@@ -106,6 +126,16 @@ void reorderVectorOutOfPlaceWithInversePerm(double *dst, const double *src, cons
   else {
     CopyVector(dst, src, len);
   }
+}
+
+void reorderVectorOutOfPlaceWithInversePerm(double *dst, const double *src, const int *inversePerm, int len)
+{
+  return reorderVectorOutOfPlaceWithInversePerm_(dst, src, inversePerm, len);
+}
+
+void reorderVectorOutOfPlaceWithInversePerm(int *dst, const int *src, const int *inversePerm, int len)
+{
+  return reorderVectorOutOfPlaceWithInversePerm_(dst, src, inversePerm, len);
 }
 
 double *getReorderVector(const double *v, const int *perm, int len)
