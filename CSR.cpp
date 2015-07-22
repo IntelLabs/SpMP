@@ -94,7 +94,7 @@ CSR::CSR(int m, int n, int nnz, int base /*=0*/)
 }
 
 CSR::CSR(const char *fileName, bool forceSymmetric /*=false*/, int pad /*=1*/)
- : base(0), rowptr(NULL), colidx(NULL), values(NULL), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL)
+ : base(0), rowptr(NULL), colidx(NULL), values(NULL), ownData_(true), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL)
 {
   int m = atoi(fileName);
   char buf[1024];
