@@ -61,12 +61,16 @@ void getInversePerm(int *inversePerm, const int *perm, int n);
  * @return true if perm array is a permutation
  */
 bool isPerm(const int *perm, int n);
+bool isInversePerm(const int *perm, const int *inversePerm, int len);
 
 /**
  * dst = perm(src)
  */
 void reorderVectorOutOfPlace(double *dst, const double *src, const int *perm, int len);
 void reorderVectorOutOfPlaceWithInversePerm(double *dst, const double *src, const int *inversePerm, int len);
+
+void reorderVectorOutOfPlace(int *dst, const int *src, const int *perm, int len);
+void reorderVectorOutOfPlaceWithInversePerm(int *dst, const int *src, const int *inversePerm, int len);
 
 /**
  * @return perm(v)
