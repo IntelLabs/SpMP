@@ -51,7 +51,7 @@ int main(int argc, const char *argv[])
     printf("m=%d n=%d nnz=%d\n", A.m, A.n, A.rowptr[A.m]);
     A.storeBin(argv[2]);
 
-#define CHECK_CORRECTNESS
+//#define CHECK_CORRECTNESS
 #ifdef CHECK_CORRECTNESS
     CSR B(argv[2]);
     assert(A.equals(B, true));
