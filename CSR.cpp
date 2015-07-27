@@ -90,7 +90,7 @@ CSR::CSR(int m, int n, int nnz, int base /*=0*/)
 {
   this->m=m;
   this->n=n;
-  alloc(n, nnz);
+  alloc(m, nnz);
 }
 
 CSR::CSR(const char *fileName, bool forceSymmetric /*=false*/, int pad /*=1*/)
@@ -354,39 +354,41 @@ static inline int transpose_idx(int idx, int dim1, int dim2)
  */
 CSR *CSR::transpose() const
 {
-   const double *A_data = values;
-   const int *A_i = rowptr;
-   const int *A_j = colidx;
-   int num_rowsA = m;
-   int num_colsA = n;
-   int nnz = rowptr[m];
-   int num_nonzerosA = nnz;
+  assert(base == 0);
 
-   CSR *AT = new CSR();
+  const double *A_data = values;
+  const int *A_i = rowptr;
+  const int *A_j = colidx;
+  int num_rowsA = m;
+  int num_colsA = n;
+  int nnz = rowptr[m];
+  int num_nonzerosA = nnz;
 
-   AT->m = m;
-   AT->n = n;
-   AT->colidx = MALLOC(int, nnz);
-   assert(AT->colidx);
-   if (A_data) {
-     AT->values = MALLOC(double, nnz);
-     assert(AT->values);
-   }
-   if (diagptr) {
-     AT->diagptr = MALLOC(int, m);
-     assert(AT->diagptr);
-   }
+  CSR *AT = new CSR();
 
-   if (0 == num_colsA) {
-     return AT;
-   }
+  AT->m = n;
+  AT->n = m;
+  AT->colidx = MALLOC(int, nnz);
+  assert(AT->colidx);
+  if (A_data) {
+    AT->values = MALLOC(double, nnz);
+    assert(AT->values);
+  }
+  if (diagptr) {
+    AT->diagptr = MALLOC(int, n);
+    assert(AT->diagptr);
+  }
 
-   int *AT_j = AT->colidx;
-   double *AT_data = AT->values;
+  if (0 == num_colsA) {
+    return AT;
+  }
 
-   double t = omp_get_wtime();
+  int *AT_j = AT->colidx;
+  double *AT_data = AT->values;
 
-   int *bucket = MALLOC(
+  double t = omp_get_wtime();
+
+  int *bucket = MALLOC(
     int, (num_colsA + 1)*omp_get_max_threads());
 
 #ifndef NDEBUG
@@ -397,109 +399,110 @@ CSR *CSR::transpose() const
 #endif
 
 #pragma omp parallel
-   {
-   int nthreads = omp_get_num_threads();
-   int tid = omp_get_thread_num();
+  {
+  int nthreads = omp_get_num_threads();
+  int tid = omp_get_thread_num();
 
-   int nnzPerThread = (num_nonzerosA + nthreads - 1)/nthreads;
-   int iBegin = lower_bound(A_i, A_i + num_rowsA, nnzPerThread*tid) - A_i;
-   int iEnd = lower_bound(A_i, A_i + num_rowsA, nnzPerThread*(tid + 1)) - A_i;
+  int nnzPerThread = (num_nonzerosA + nthreads - 1)/nthreads;
+  int iBegin = lower_bound(A_i, A_i + num_rowsA, nnzPerThread*tid) - A_i;
+  int iEnd = lower_bound(A_i, A_i + num_rowsA, nnzPerThread*(tid + 1)) - A_i;
 
-   int i, j;
-   memset(bucket + tid*num_colsA, 0, sizeof(int)*num_colsA);
+  int i, j;
+  memset(bucket + tid*num_colsA, 0, sizeof(int)*num_colsA);
 
-   // count the number of keys that will go into each bucket
-   for (j = A_i[iBegin]; j < A_i[iEnd]; ++j) {
-     int idx = A_j[j];
+  // count the number of keys that will go into each bucket
+  for (j = A_i[iBegin]; j < A_i[iEnd]; ++j) {
+    int idx = A_j[j];
 #ifndef NDEBUG
-     if (idx < 0 || idx >= num_colsA) {
-       printf("tid = %d num_rowsA = %d num_colsA = %d num_nonzerosA = %d iBegin = %d iEnd = %d A_i[iBegin] = %d A_i[iEnd] = %d j = %d idx = %d\n", tid, num_rowsA, num_colsA, num_nonzerosA, iBegin, iEnd, A_i[iBegin], A_i[iEnd], j, idx);
-     }
+    if (idx < 0 || idx >= num_colsA) {
+      printf("tid = %d num_rowsA = %d num_colsA = %d num_nonzerosA = %d iBegin = %d iEnd = %d A_i[iBegin] = %d A_i[iEnd] = %d j = %d idx = %d\n", tid, num_rowsA, num_colsA, num_nonzerosA, iBegin, iEnd, A_i[iBegin], A_i[iEnd], j, idx);
+    }
 #endif
-     assert(idx >= 0 && idx < num_colsA);
-     bucket[tid*num_colsA + idx]++;
-   }
-   // up to here, bucket is used as int[nthreads][num_colsA] 2D array
+    assert(idx >= 0 && idx < num_colsA);
+    bucket[tid*num_colsA + idx]++;
+  }
+  // up to here, bucket is used as int[nthreads][num_colsA] 2D array
 
-   // prefix sum
+  // prefix sum
 #pragma omp barrier
 
-   for (i = tid*num_colsA + 1; i < (tid + 1)*num_colsA; ++i) {
-     int transpose_i = transpose_idx(i, nthreads, num_colsA);
-     int transpose_i_minus_1 = transpose_idx(i - 1, nthreads, num_colsA);
+  for (i = tid*num_colsA + 1; i < (tid + 1)*num_colsA; ++i) {
+    int transpose_i = transpose_idx(i, nthreads, num_colsA);
+    int transpose_i_minus_1 = transpose_idx(i - 1, nthreads, num_colsA);
 
-     bucket[transpose_i] += bucket[transpose_i_minus_1];
-   }
+    bucket[transpose_i] += bucket[transpose_i_minus_1];
+  }
 
 #pragma omp barrier
 #pragma omp master
-   {
-     for (i = 1; i < nthreads; ++i) {
-       int j0 = num_colsA*i - 1, j1 = num_colsA*(i + 1) - 1;
-       int transpose_j0 = transpose_idx(j0, nthreads, num_colsA);
-       int transpose_j1 = transpose_idx(j1, nthreads, num_colsA);
+  {
+    for (i = 1; i < nthreads; ++i) {
+      int j0 = num_colsA*i - 1, j1 = num_colsA*(i + 1) - 1;
+      int transpose_j0 = transpose_idx(j0, nthreads, num_colsA);
+      int transpose_j1 = transpose_idx(j1, nthreads, num_colsA);
 
-       bucket[transpose_j1] += bucket[transpose_j0];
-     }
-     bucket[num_colsA] = num_nonzerosA;
-   }
+      bucket[transpose_j1] += bucket[transpose_j0];
+    }
+  }
 #pragma omp barrier
 
-   if (tid > 0) {
-     int transpose_i0 = transpose_idx(num_colsA*tid - 1, nthreads, num_colsA);
+  if (tid > 0) {
+    int transpose_i0 = transpose_idx(num_colsA*tid - 1, nthreads, num_colsA);
 
-     for (i = tid*num_colsA; i < (tid + 1)*num_colsA - 1; ++i) {
-       int transpose_i = transpose_idx(i, nthreads, num_colsA);
+    for (i = tid*num_colsA; i < (tid + 1)*num_colsA - 1; ++i) {
+      int transpose_i = transpose_idx(i, nthreads, num_colsA);
 
-       bucket[transpose_i] += bucket[transpose_i0];
-     }
-   }
+      bucket[transpose_i] += bucket[transpose_i0];
+    }
+  }
 
 #pragma omp barrier
 
-   if (A_data) {
-      for (i = iEnd - 1; i >= iBegin; --i) {
-        for (j = A_i[i + 1] - 1; j >= A_i[i]; --j) {
-          int idx = A_j[j];
-          --bucket[tid*num_colsA + idx];
+  if (A_data) {
+    for (i = iEnd - 1; i >= iBegin; --i) {
+      for (j = A_i[i + 1] - 1; j >= A_i[i]; --j) {
+        int idx = A_j[j];
+        --bucket[tid*num_colsA + idx];
 
-          int offset = bucket[tid*num_colsA + idx];
+        int offset = bucket[tid*num_colsA + idx];
 
-          assert(offset >= 0 && offset < num_nonzerosA);
-          AT_data[offset] = A_data[j];
-          AT_j[offset] = i;
-        }
+        assert(offset >= 0 && offset < num_nonzerosA);
+        AT_data[offset] = A_data[j];
+        AT_j[offset] = i;
       }
-   }
-   else {
-      for (i = iEnd - 1; i >= iBegin; --i) {
-        for (j = A_i[i + 1] - 1; j >= A_i[i]; --j) {
-          int idx = A_j[j];
-          --bucket[tid*num_colsA + idx];
+    }
+  }
+  else {
+    for (i = iEnd - 1; i >= iBegin; --i) {
+      for (j = A_i[i + 1] - 1; j >= A_i[i]; --j) {
+        int idx = A_j[j];
+        --bucket[tid*num_colsA + idx];
 
-          int offset = bucket[tid*num_colsA + idx];
+        int offset = bucket[tid*num_colsA + idx];
 
-          AT_j[offset] = i;
-        }
+        AT_j[offset] = i;
       }
-   }
+    }
+  }
 
-   if (diagptr) {
+  if (diagptr) {
 #pragma omp barrier
-     for (i = iBegin; i < iEnd; ++i) {
-       for (int j = bucket[i]; j < bucket[i + 1]; ++j) {
-         int c = AT_j[j];
-         if (c == i) AT->diagptr[i] = j;
-       }
-     }
-   }
+#pragma omp for
+    for (int i = 0; i < num_colsA; i++) {
+      for (int j = bucket[i]; j < bucket[i + 1]; ++j) {
+        int c = AT_j[j];
+        if (c == i) AT->diagptr[i] = j;
+      }
+    }
+  }
 
-   } // omp parallel
+  } // omp parallel
 
-   AT->rowptr = bucket; 
+  bucket[num_colsA] = num_nonzerosA;
+  AT->rowptr = bucket; 
 
-   return AT;
- }
+  return AT;
+}
 
 template<int BASE = 0>
 int getBandwidth_(const CSR *A)
@@ -560,6 +563,15 @@ bool CSR::equals(const CSR& A, bool print /*=false*/) const
   } // for each row
 
   return true;
+}
+
+void CSR::print() const
+{
+  for (int i = 0; i < m; i++) {
+    for (int j = rowptr[i] - base; j < rowptr[i + 1] - base; j++) {
+      printf("%d %d %g\n", i + base, colidx[j], values[j]);
+    }
+  }
 }
 
 } // namespace SpMP

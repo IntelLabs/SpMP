@@ -100,7 +100,7 @@ assume COO is one-based index */
 
 template<class T>
 void coo2csr(
-  int n, int nnz,
+  int m, int nnz,
   int *rowptr, int *colidx, T *values,
   const int *cooRowidx, const int *cooColidx, const T *cooValues,
   bool sort)
@@ -108,17 +108,17 @@ void coo2csr(
   int i, l;
 
 #pragma omp parallel for
-  for (i=0; i<=n; i++) rowptr[i] = 0;
+  for (i = 0; i <= m; i++) rowptr[i] = 0;
 
   /* determine row lengths */
-  for (i=0; i<nnz; i++) rowptr[cooRowidx[i]]++;
+  for (i = 0; i < nnz; i++) rowptr[cooRowidx[i]]++;
 
 
-  for (i=0; i<n; i++) rowptr[i+1] += rowptr[i];
+  for (i = 0; i < m; i++) rowptr[i+1] += rowptr[i];
 
 
   /* go through the structure  once more. Fill in output matrix. */
-  for (l=0; l<nnz; l++){
+  for (l = 0; l < nnz; l++) {
     i = rowptr[cooRowidx[l] - 1];
     values[i] = cooValues[l];
     colidx[i] = cooColidx[l] - 1;
@@ -126,14 +126,14 @@ void coo2csr(
   }
 
   /* shift back rowptr */
-  for (i=n; i>0; i--) rowptr[i] = rowptr[i-1];
+  for (i = m; i>0; i--) rowptr[i] = rowptr[i-1];
 
   rowptr[0] = 0;
 
   if (sort) {
 #pragma omp parallel for
-    for (i=0; i<n; i++){
-      qsort (colidx, values, rowptr[i], rowptr[i+1] - 1);
+    for (i=0; i < m; i++){
+      qsort(colidx, values, rowptr[i], rowptr[i+1] - 1);
       assert(is_sorted(colidx + rowptr[i], colidx + rowptr[i+1]));
     }
   }
@@ -154,7 +154,7 @@ void dcoo2csr(CSR *Acrs, const COO *Acoo, bool createSeparateDiagData /*= true*/
   Acrs->m=Acoo->m;
 
   dcoo2csr(
-    Acrs->n, Acoo->nnz,
+    Acrs->m, Acoo->nnz,
     Acrs->rowptr, Acrs->colidx, Acrs->values,
     Acoo->rowidx, Acoo->colidx, Acoo->values);
 
@@ -178,7 +178,7 @@ void dcoo2csr(CSR *Acrs, const COO *Acoo, bool createSeparateDiagData /*= true*/
   }
 }
 
-bool loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false*/, int pad /*=1*/)
+static bool loadMatrixMarket_(const char *file, COO &coo, bool force_symmetric, bool transpose, int pad)
 {
   FILE *fp=fopen(file, "r");
   if (NULL == fp) {
@@ -190,12 +190,14 @@ bool loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false
   MM_typecode matcode;
   if (mm_read_banner (fp, &matcode) != 0) {
     fprintf(stderr, "Error: could not process Matrix Market banner.\n");
+    fclose(fp);
     return false;
   }
 
   if (!mm_is_valid (matcode) &&
        (mm_is_array (matcode) || mm_is_dense (matcode)) ) {
     fprintf(stderr, "Error: only support sparse and real matrices.\n");
+    fclose(fp);
     return false;
   }
   bool pattern = mm_is_pattern (matcode);
@@ -205,16 +207,17 @@ bool loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false
   int nnz; // # of non-zeros specified in the file
   if (mm_read_mtx_crd_size(fp, &m, &n, &nnz) !=0) {
     fprintf(stderr, "Error: could not read matrix size.\n");
+    fclose(fp);
     return false;
+  }
+  if (transpose) {
+    assert(!force_symmetric);
+    swap(m, n);
   }
 
   int origM = m, origN = n;
   m = (m + pad - 1)/pad*pad;
   n = (n + pad - 1)/pad*pad;
-  if (m != n) {
-    fprintf(stderr, "Error: only support square matrices.\n");
-    return false;
-  }
 
   size_t count;
   if (force_symmetric || mm_is_symmetric (matcode) == 1) {
@@ -232,6 +235,7 @@ bool loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false
   int *rowidx = MALLOC(int, count + extraCount);
   if (!values || !colidx || !rowidx) {
     fprintf(stderr, "Failed to allocate memory\n");
+    fclose(fp);
     return false;
   }
 
@@ -242,6 +246,7 @@ bool loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false
     memset(rowcnt, 0, sizeof(int)*(m + 1));
     if (!colidx_temp || !rowcnt) {
       fprintf(stderr, "Failed to allocate memory\n");
+      fclose(fp);
       return false;
     }
   }
@@ -252,8 +257,11 @@ bool loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false
   int x, y;
   double real, imag;
   while (mm_read_mtx_crd_entry (fp, &x, &y, &real, &imag, matcode) == 0) {
+    if (transpose) swap(x, y);
+
     if (x > origM || y > origN) {
       fprintf(stderr, "Error: (%d %d) coordinate is out of range.\n", x, y);
+      fclose(fp);
       return false;
     }
 
@@ -276,6 +284,7 @@ bool loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false
   fclose(fp);
 
   if (lines != nnz) {
+    printf("%d %d\n", lines, nnz);
     fprintf(stderr, "Error: nnz specified in the header doesn't match with # of lines\n");
     return false;
   }
@@ -329,6 +338,16 @@ bool loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false
   coo.rowidx = rowidx;
 
   return true;
+}
+
+bool loadMatrixMarketTransposed(const char *file, COO &coo, int pad /*= 1*/)
+{
+  return loadMatrixMarket_(file, coo, false, true /*transpose*/, pad);
+}
+
+bool loadMatrixMarket (const char *file, COO &coo, bool force_symmetric /*=false*/, int pad /*=1*/)
+{
+  return loadMatrixMarket_(file, coo, force_symmetric, false /*no-transpose*/, pad);
 }
 
 } // namespace SpMP

@@ -143,6 +143,9 @@ public:
 
   int getBandwidth() const;
   bool equals(const CSR& A, bool print = false) const;
+  int getNnz() const { return rowptr[m] - base; }
+
+  void print() const;
 
   template<class T> T *allocate_(size_t n) const
   {

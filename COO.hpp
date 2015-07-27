@@ -50,6 +50,7 @@ public:
  * @ret true if succeed
  */
 bool loadMatrixMarket (const char *fileName, COO &Acoo, bool force_symmetric = false, int pad = 1);
+bool loadMatrixMarketTransposed (const char *fileName, COO &Acoo, int pad = 1);
 
 /**
  * @param createSeparateDiagData true then populate diag and idiag
