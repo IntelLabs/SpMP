@@ -86,7 +86,7 @@ void CSR::alloc(int m, int nnz, bool createSeparateDiagData /*= true*/)
 }
 
 CSR::CSR(int m, int n, int nnz, int base /*=0*/)
- : base(base)
+ : base(base), extptr(NULL)
 {
   this->m=m;
   this->n=n;
