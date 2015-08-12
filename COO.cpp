@@ -239,16 +239,16 @@ static bool loadMatrixMarket_(const char *file, COO &coo, bool force_symmetric, 
     return false;
   }
 
-  int *colidx_temp, *rowcnt;
+  int *colidx_temp, *rowcnt = NULL;
   if (coo.isSymmetric) {
     colidx_temp = MALLOC(int, count);
     rowcnt = MALLOC(int, m + 1);
-    memset(rowcnt, 0, sizeof(int)*(m + 1));
     if (!colidx_temp || !rowcnt) {
       fprintf(stderr, "Failed to allocate memory\n");
       fclose(fp);
       return false;
     }
+    memset(rowcnt, 0, sizeof(int)*(m + 1));
   }
 
   // read values
@@ -256,6 +256,7 @@ static bool loadMatrixMarket_(const char *file, COO &coo, bool force_symmetric, 
   int lines = 0;
   int x, y;
   double real, imag;
+  int base = 1;
   while (mm_read_mtx_crd_entry (fp, &x, &y, &real, &imag, matcode) == 0) {
     if (transpose) swap(x, y);
 
@@ -268,6 +269,7 @@ static bool loadMatrixMarket_(const char *file, COO &coo, bool force_symmetric, 
     rowidx[count] = x;
     colidx[count] = y;
     values[count] = pattern ? 1 : real;
+    if (0 == x || 0 == y) base = 0;
 
     ++count;
     ++lines;
@@ -282,6 +284,16 @@ static bool loadMatrixMarket_(const char *file, COO &coo, bool force_symmetric, 
     ++count;
   }
   fclose(fp);
+
+  if (0 == base) {
+    for (int i = 0; i < count; ++i) {
+      rowidx[i]++;
+      colidx[i]++;
+    }
+    for (int i = m; i > 0; --i) {
+      rowcnt[i] = rowcnt[i - 1];
+    }
+  }
 
   if (lines != nnz) {
     printf("%d %d\n", lines, nnz);
