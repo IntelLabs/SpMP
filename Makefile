@@ -43,16 +43,7 @@ all: clean
 
 test: test/gs_test test/reordering_test test/trsv_test
 
-test/gs_test: test/gs_test.o $(LIBRARY)
-	$(CC) $(CCFLAGS) -o $@ $^
-
-test/trsv_test: test/trsv_test.o $(LIBRARY)
-	$(CC) $(CCFLAGS) -o $@ $^
-
-test/reordering_test: test/reordering_test.o $(LIBRARY)
-	$(CC) $(CCFLAGS) -o $@ $^
-
-test/mtx2bin: test/mtx2bin.o $(LIBRARY)
+test/%: test/%.o $(LIBRARY)
 	$(CC) $(CCFLAGS) -o $@ $^
 
 %.o: %.cpp
