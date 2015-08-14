@@ -326,11 +326,11 @@ void CSR::make1BasedIndexing()
 {
   if (1 == base) return;
 
+  int nnz = rowptr[m];
 #pragma omp parallel for
   for(int i=0; i <= m; i++)
     rowptr[i]++;
 
-  int nnz = rowptr[m];
 #pragma omp parallel for
   for(int i=0; i < nnz; i++)
     colidx[i]++;
