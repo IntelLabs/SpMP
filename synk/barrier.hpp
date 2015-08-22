@@ -54,13 +54,21 @@ struct CoreBarrier {
 /* barrier container */
 class Barrier : public Synk {
 public:
-    Barrier(int numCores, int numThreadsPerCore);
     ~Barrier();
+
+    // If you want to construct the singleton with options other than
+    // the default one, call this function before ANY invocation of
+    // getInstance
+    static void initializeInstance(int numCores, int numThreadsPerCore);
+    static Barrier *getInstance();
 
     void init(int tid);
     void wait(int tid);
 
 protected:
+    Barrier(int numCores, int numThreadsPerCore);
+      /* not public to be used as a singleton */
+
     CoreBarrier **cores;
     CoreBarrier **threadCores;
     int8_t      *coreTids;

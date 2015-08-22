@@ -40,12 +40,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 using namespace std;
 
-#ifdef LOADIMBA
-extern synk::LoadImba *bar;
-#else
-extern synk::Barrier *bar;
-#endif
-
 namespace SpMP
 {
 
@@ -1116,6 +1110,12 @@ void findLevels_(
 {
   int qTailPrefixSum[NUM_MAX_THREADS] = { 0 };
   volatile int endSynchronized[1] = { 0 };
+
+#ifdef LOADIMBA
+  synk::LoadImba *bar = synk::LoadImba::getInstance();
+#else
+  synk::Barrier *bar = synk::Barrier::getInstance();
+#endif
 
 #pragma omp parallel
   {

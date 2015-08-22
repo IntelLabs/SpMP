@@ -49,8 +49,13 @@ struct ThreadLoadImba {
 /* barrier container */
 class LoadImba : public Barrier {
 public:
-    LoadImba(int numCores, int numThreadsPerCore);
     ~LoadImba();
+
+    // If you want to construct the singleton with options other than
+    // the default one, call this function before ANY invocation of
+    // getInstance
+    static void initializeInstance(int numCores, int numThreadsPerCore);
+    static LoadImba *getInstance();
 
     void init(int tid, int numUses = 1);
     void wait(int tid, int barNum = 0);
@@ -58,10 +63,13 @@ public:
     void print(bool all = false);
     void printLoadImbalance(unsigned long long refTime);
 
-public:
     ReduceBarrier<uint64_t>     *red;
     ThreadLoadImba              **limba;
     int                         numUses;
+
+protected:
+    LoadImba(int numCores, int numThreadsPerCore);
+      /* not public to be used as a singleton */
 };
 
 }

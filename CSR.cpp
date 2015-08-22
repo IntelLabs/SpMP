@@ -35,19 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Utils.hpp"
 #include "MemoryPool.hpp"
 
-#ifdef LOADIMBA
-#include "synk/loadimba.hpp"
-#else
-#include "synk/barrier.hpp"
-#endif
-
 using namespace std;
-
-#ifdef LOADIMBA
-extern synk::LoadImba *bar;
-#else
-extern synk::Barrier *bar;
-#endif
 
 namespace SpMP
 {

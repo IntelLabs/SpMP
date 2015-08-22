@@ -30,6 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <stdint.h>
+#include <omp.h>
 #include <stdio.h>
 
 #include "cpuid.h"
@@ -50,6 +51,62 @@ static uint64_t ull_max(uint64_t a, uint64_t b)
 
 namespace synk
 {
+
+static LoadImba *instance = NULL;
+
+void LoadImba::initializeInstance(int numCores, int numThreadsPerCore)
+{
+    if (!instance)
+    {
+        if (omp_in_parallel())
+        {
+#pragma omp barrier
+#pragma omp master
+            instance = new LoadImba(numCores, numThreadsPerCore);
+#pragma omp barrier
+            instance->init(omp_get_thread_num());
+        }
+        else
+        {
+            instance = new LoadImba(numCores, numThreadsPerCore);
+#pragma omp parallel
+            {
+                instance->init(omp_get_thread_num());
+            }
+        }
+    }
+}
+
+LoadImba *LoadImba::getInstance()
+{
+    if (!instance)
+    {
+        int threadsPerCore =
+#ifdef __MIC__
+            4;
+#else
+            1;
+#endif
+
+        if (omp_in_parallel())
+        {
+#pragma omp barrier
+#pragma omp master
+            instance = new LoadImba(omp_get_num_threads()/threadsPerCore, threadsPerCore);
+#pragma omp barrier
+            instance->init(omp_get_thread_num());
+        }
+        else
+        {
+            instance = new LoadImba(omp_get_max_threads()/threadsPerCore, threadsPerCore);
+#pragma omp parallel
+            {
+                instance->init(omp_get_thread_num());
+            }
+        }
+    }
+    return instance;
+}
 
 /* constructor */
 LoadImba::LoadImba(int numCores_, int numThreadsPerCore_)

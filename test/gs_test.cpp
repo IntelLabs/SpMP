@@ -86,8 +86,6 @@ bwd_p2p_tr_red_perm        8.52 gflops   51.36 gbps
 
 #include "test.hpp"
 
-synk::Barrier *bar;
-
 typedef enum
 {
   REFERENCE = 0,
@@ -151,7 +149,7 @@ void forwardGSWithBarrier(
         y[row] += sum*A.idiag[row];
       } // for each row
 
-      bar->wait(tid);
+      synk::Barrier::getInstance()->wait(tid);
     } // for each level
   } // omp parallel
 }
@@ -181,7 +179,7 @@ void backwardGSWithBarrier(
         }
         y[row] += sum*A.idiag[row];
       } // for each row
-      bar->wait(tid);
+      synk::Barrier::getInstance()->wait(tid);
     } // for each level
   } // omp parallel
 }
@@ -214,7 +212,7 @@ void forwardGS(
 
     memset((char *)(taskFinished + nBegin), 0, (nEnd - nBegin)*sizeof(int));
 
-    bar->wait(tid);
+    synk::Barrier::getInstance()->wait(tid);
 
     for (int task = threadBoundaries[tid]; task < threadBoundaries[tid + 1]; ++task) {
       SPMP_LEVEL_SCHEDULE_WAIT;
@@ -261,7 +259,7 @@ void backwardGS(
 
     memset((char *)(taskFinished + nBegin), 0, (nEnd - nBegin)*sizeof(int));
 
-    bar->wait(tid);
+    synk::Barrier::getInstance()->wait(tid);
 
     for (int task = threadBoundaries[tid + 1] - 1; task >= threadBoundaries[tid]; --task) {
       SPMP_LEVEL_SCHEDULE_WAIT;
@@ -303,7 +301,7 @@ void forwardGSWithBarrierAndReorderedMatrix(
         }
         y[i] += sum*A.idiag[i];
       } // for each row
-      bar->wait(tid);
+      synk::Barrier::getInstance()->wait(tid);
     } // for each level
   } // omp parallel
 }
@@ -331,7 +329,7 @@ void backwardGSWithBarrierAndReorderedMatrix(
         }
         y[i] += sum*A.idiag[i];
       } // for each row
-      bar->wait(tid);
+      synk::Barrier::getInstance()->wait(tid);
     } // for each level
   } // omp parallel
 }
@@ -363,7 +361,7 @@ void forwardGSWithReorderedMatrix(
 
     memset((char *)(taskFinished + nBegin), 0, (nEnd - nBegin)*sizeof(int));
 
-    bar->wait(tid);
+    synk::Barrier::getInstance()->wait(tid);
 
     for (int task = threadBoundaries[tid]; task < threadBoundaries[tid + 1]; ++task) {
       SPMP_LEVEL_SCHEDULE_WAIT;
@@ -408,7 +406,7 @@ void backwardGSWithReorderedMatrix(
 
     memset((char *)(taskFinished + nBegin), 0, (nEnd - nBegin)*sizeof(int));
 
-    bar->wait(tid);
+    synk::Barrier::getInstance()->wait(tid);
 
     for (int task = threadBoundaries[tid + 1] - 1; task >= threadBoundaries[tid]; --task) {
       SPMP_LEVEL_SCHEDULE_WAIT;
@@ -430,23 +428,6 @@ void backwardGSWithReorderedMatrix(
 int main(int argc, char **argv)
 {
   double tBegin = omp_get_wtime();
-
-  /////////////////////////////////////////////////////////////////////////////
-  // Initialize barrier
-  /////////////////////////////////////////////////////////////////////////////
-
-  int nthreads = omp_get_max_threads();
-
-#ifdef __MIC__
-  bar = new synk::Barrier(omp_get_max_threads()/4, 4);
-#else
-  bar = new synk::Barrier(omp_get_max_threads(), 1);
-#endif
-
-#pragma omp parallel
-  {
-    bar->init(omp_get_thread_num());
-  }
 
   /////////////////////////////////////////////////////////////////////////////
   // Load input
