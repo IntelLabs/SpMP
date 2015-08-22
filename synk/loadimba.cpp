@@ -108,6 +108,11 @@ LoadImba *LoadImba::getInstance()
     return instance;
 }
 
+void Barrier::deleteInstance()
+{
+    delete instance;
+}
+
 /* constructor */
 LoadImba::LoadImba(int numCores_, int numThreadsPerCore_)
         : Barrier(numCores_, numThreadsPerCore_)

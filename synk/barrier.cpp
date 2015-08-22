@@ -98,6 +98,11 @@ Barrier *Barrier::getInstance()
     return instance;
 }
 
+void Barrier::deleteInstance()
+{
+    delete instance;
+}
+
 /* constructor */
 Barrier::Barrier(int numCores_, int numThreadsPerCore_)
         : Synk(numCores_, numThreadsPerCore_)

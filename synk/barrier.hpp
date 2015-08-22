@@ -61,6 +61,7 @@ public:
     // getInstance
     static void initializeInstance(int numCores, int numThreadsPerCore);
     static Barrier *getInstance();
+    static void deleteInstance();
 
     void init(int tid);
     void wait(int tid);

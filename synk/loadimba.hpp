@@ -56,6 +56,7 @@ public:
     // getInstance
     static void initializeInstance(int numCores, int numThreadsPerCore);
     static LoadImba *getInstance();
+    static void deleteInstance();
 
     void init(int tid, int numUses = 1);
     void wait(int tid, int barNum = 0);

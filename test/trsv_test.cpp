@@ -776,5 +776,7 @@ int main(int argc, char **argv)
   FREE(bPerm);
   FREE(tempVector);
 
+  synk::Barrier::deleteInstance();
+
   return 0;
 }
