@@ -307,6 +307,12 @@ void CSR::make0BasedIndexing()
   for(int i=0; i < nnz; i++)
     colidx[i]--;
 
+  if (diagptr) {
+#pragma omp parallel for
+    for (int i = 0; i < m; i++)
+      diagptr[i]--;
+  }
+
   base = 0;
 }
 
@@ -323,7 +329,24 @@ void CSR::make1BasedIndexing()
   for(int i=0; i < nnz; i++)
     colidx[i]++;
 
+  if (diagptr) {
+#pragma omp parallel for
+    for (int i = 0; i < m; i++)
+      diagptr[i]++;
+  }
+
   base = 1;
+}
+
+void CSR::computeInverseDiag()
+{
+  if (!idiag) {
+    idiag = MALLOC(double, m);
+#pragma omp parallel for
+    for (int i = 0; i < m; i++) {
+      idiag[i] = 1/values[diagptr[i]];
+    }
+  }
 }
 
 /**

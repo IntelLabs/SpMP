@@ -136,6 +136,11 @@ public:
   void make0BasedIndexing();
   void make1BasedIndexing();
 
+  /**
+   * Precompute idiag to speedup triangular solver or GS
+   */
+  void computeInverseDiag();
+
   void alloc(int m, int nnz, bool createSeparateDiagData = true);
   void dealloc();
 
