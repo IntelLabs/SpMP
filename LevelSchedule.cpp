@@ -128,6 +128,7 @@ void LevelSchedule::init_()
 
 void LevelSchedule::constructTaskGraph(const CSR& A)
 {
+  assert(A.base == 0);
   constructTaskGraph(A, PrefixSumCostFunction(A.rowptr));
 }
 
