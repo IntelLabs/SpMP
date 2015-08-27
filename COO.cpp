@@ -194,8 +194,7 @@ static bool loadMatrixMarket_(const char *file, COO &coo, bool force_symmetric, 
     return false;
   }
 
-  if (!mm_is_valid (matcode) &&
-       (mm_is_array (matcode) || mm_is_dense (matcode)) ) {
+  if (!mm_is_valid (matcode) || mm_is_array (matcode) || mm_is_dense (matcode) ) {
     fprintf(stderr, "Error: only support sparse and real matrices.\n");
     fclose(fp);
     return false;
