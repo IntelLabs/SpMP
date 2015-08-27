@@ -155,36 +155,66 @@ CSR::~CSR()
 bool CSR::isSymmetric(bool checkValues /*=true*/, bool printFirstNonSymmetry /* = false*/) const
 {
   const int *extptr = this->extptr ? this->extptr : rowptr + 1;
-  for (int i = 0; i < m; ++i) {
-    for (int j = rowptr[i] - base; j < extptr[i] - base; ++j) {
-      int c = colidx[j] - base;
-      if (c != i) {
-        bool hasPair = false;
-        for (int k = rowptr[c] - base; k < extptr[c] - base; ++k) {
-          if (colidx[k] - base == i) {
-            hasPair = true;
-            if (checkValues && values[j] != values[k]) {
-              if (printFirstNonSymmetry) {
+  if (!printFirstNonSymmetry) {
+    volatile bool isSymmetric = true;
+
+#pragma omp parallel
+    {
+      int begin, end;
+      getSimpleThreadPartition(&begin, &end, m);
+      for (int i = begin; i < end; ++i) {
+        for (int j = rowptr[i] - base; j < extptr[i] - base; ++j) {
+          int c = colidx[j] - base;
+          if (c != i) {
+            bool hasPair = false;
+            for (int k = rowptr[c] - base; k < extptr[c] - base; ++k) {
+              if (colidx[k] - base == i) {
+                hasPair = true;
+                if (checkValues && values[j] != values[k]) {
+                  isSymmetric = false;
+                }
+                break;
+              }
+            }
+            if (!hasPair) {
+              isSymmetric = false;
+            }
+          }
+        }
+        if (!isSymmetric) break;
+      } // for each row
+    } // omp parallel
+
+    return isSymmetric;
+  }
+  else {
+    for (int i = 0; i < m; ++i) {
+      for (int j = rowptr[i] - base; j < extptr[i] - base; ++j) {
+        int c = colidx[j] - base;
+        if (c != i) {
+          bool hasPair = false;
+          for (int k = rowptr[c] - base; k < extptr[c] - base; ++k) {
+            if (colidx[k] - base == i) {
+              hasPair = true;
+              if (checkValues && values[j] != values[k]) {
                 printf(
                   "assymmetric (%d, %d) = %g, (%d, %d) = %g\n", 
                   i + 1, c + 1, values[j], c + 1, i + 1, values[k]);
+                return false;
               }
-              return false;
+              break;
             }
-            break;
           }
-        }
-        if (!hasPair) {
-          if (printFirstNonSymmetry) {
+          if (!hasPair) {
             printf(
               "assymmetric (%d, %d) exists but (%d, %d) doesn't\n",
               i + 1, c + 1, c + 1, i + 1);
+            return false;
           }
-          return false;
         }
       }
-    }
-  } // for each row
+    } // for each row
+  }
 
   return true;
 }
