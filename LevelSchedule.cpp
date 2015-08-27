@@ -128,14 +128,15 @@ void LevelSchedule::init_()
 
 void LevelSchedule::constructTaskGraph(const CSR& A)
 {
-  assert(A.base == 0);
   constructTaskGraph(A, PrefixSumCostFunction(A.rowptr));
 }
 
 void LevelSchedule::constructTaskGraph(const CSR& A, const CostFunction& costFunction)
 {
+  ((CSR *)&A)->make0BasedIndexing();
   assert(A.isSymmetric(false));
   constructTaskGraph(A.m, A.rowptr, A.diagptr, A.extptr, A.colidx, costFunction);
+  ((CSR *)&A)->make1BasedIndexing();
 }
 
 static int *constructDiagPtr(
