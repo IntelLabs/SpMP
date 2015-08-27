@@ -290,14 +290,16 @@ static bool loadMatrixMarket_(const char *file, COO &coo, bool force_symmetric, 
       rowidx[i]++;
       colidx[i]++;
     }
-    for (int i = m; i > 0; --i) {
-      rowcnt[i] = rowcnt[i - 1];
-    }
+    if (coo.isSymmetric) {
+      for (int i = m; i > 0; --i) {
+        rowcnt[i] = rowcnt[i - 1];
+      }
+    } 
   }
 
   if (lines != nnz) {
-    printf("%d %d\n", lines, nnz);
-    fprintf(stderr, "Error: nnz specified in the header doesn't match with # of lines\n");
+    fprintf(stderr, "Error: nnz (%d) specified in the header doesn't match with # of lines (%d) in file %s\n",
+            nnz, lines, file);
     return false;
   }
     
