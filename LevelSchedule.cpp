@@ -133,10 +133,13 @@ void LevelSchedule::constructTaskGraph(const CSR& A)
 
 void LevelSchedule::constructTaskGraph(const CSR& A, const CostFunction& costFunction)
 {
+  bool was1Based = 1 == A.base;
   ((CSR *)&A)->make0BasedIndexing();
   assert(A.isSymmetric(false));
   constructTaskGraph(A.m, A.rowptr, A.diagptr, A.extptr, A.colidx, costFunction);
-  ((CSR *)&A)->make1BasedIndexing();
+  if (was1Based) {
+    ((CSR *)&A)->make1BasedIndexing();
+  }
 }
 
 static int *constructDiagPtr(
