@@ -35,6 +35,17 @@ double get_cpu_freq()
   return freq;
 }
 
+void getSimpleThreadPartition(int* begin, int *end, int n)
+{
+  int num_threads = omp_get_num_threads();
+  int my_thread_num = omp_get_thread_num();
+
+  int n_per_thread = (n + num_threads - 1)/num_threads;
+
+  *begin = std::min(n_per_thread*my_thread_num, n);
+  *end = std::min(*begin + n_per_thread, n);
+}
+
 void getInversePerm(int *inversePerm, const int *perm, int n)
 {
 #pragma omp parallel for

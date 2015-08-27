@@ -55,6 +55,8 @@ bool correctnessCheck(
   return true;
 }
 
+void getSimpleThreadPartition(int* begin, int *end, int n);
+
 void getInversePerm(int *inversePerm, const int *perm, int n);
 
 /**
