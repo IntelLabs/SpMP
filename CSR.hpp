@@ -111,10 +111,28 @@ public:
     double *w,
     double alpha, const double *x, double beta, const double *y, double gamma)
     const;
+
   /**
    * Compute w = A*x
    */
   void multiplyWithVector(double *w, const double *x) const;
+
+  /**
+   * Compute W = alpha*A*X + beta*Y + gamma.
+   * W, X, and Y are dense matrices with width k.
+   */
+  void multiplyWithDenseMatrix(
+    double *W, int k, int wRowStride, int wColumnStride,
+    double alpha,
+    const double *X, int xRowStride, int xColumnStride,
+    double beta, const double *Y, int yRowStride, int yColumnStride,
+    double gamma) const;
+
+  /**
+   * Compute W = A*X.
+   * W and X are dense matrices with width k, and are in column major
+   */
+  void multiplyWithDenseMatrix(double *W, int k, const double *X) const;
 
   /**
    * get reverse Cuthill Mckee permutation that tends to reduce the bandwidth
