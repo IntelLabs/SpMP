@@ -397,13 +397,7 @@ CSR *CSR::transpose() const
 {
   assert(base == 0);
 
-  const double *A_data = values;
-  const int *A_i = rowptr;
-  const int *A_j = colidx;
-  int num_rowsA = m;
-  int num_colsA = n;
   int nnz = rowptr[m];
-  int num_nonzerosA = nnz;
 
   CSR *AT = new CSR();
 
@@ -411,7 +405,7 @@ CSR *CSR::transpose() const
   AT->n = m;
   AT->colidx = MALLOC(int, nnz);
   assert(AT->colidx);
-  if (A_data) {
+  if (values) {
     AT->values = MALLOC(double, nnz);
     assert(AT->values);
   }
@@ -420,22 +414,19 @@ CSR *CSR::transpose() const
     assert(AT->diagptr);
   }
 
-  if (0 == num_colsA) {
+  if (0 == n) {
     return AT;
   }
-
-  int *AT_j = AT->colidx;
-  double *AT_data = AT->values;
 
   double t = omp_get_wtime();
 
   int *bucket = MALLOC(
-    int, (num_colsA + 1)*omp_get_max_threads());
+    int, (n + 1)*omp_get_max_threads());
 
 #ifndef NDEBUG
   int i;
-  for (i = 0; i < num_rowsA; ++i) {
-    assert(A_i[i + 1] >= A_i[i]);
+  for (i = 0; i < m; ++i) {
+    assert(rowptr[i + 1] >= rowptr[i]);
   }
 #endif
 
@@ -444,32 +435,31 @@ CSR *CSR::transpose() const
   int nthreads = omp_get_num_threads();
   int tid = omp_get_thread_num();
 
-  int nnzPerThread = (num_nonzerosA + nthreads - 1)/nthreads;
-  int iBegin = lower_bound(A_i, A_i + num_rowsA, nnzPerThread*tid) - A_i;
-  int iEnd = lower_bound(A_i, A_i + num_rowsA, nnzPerThread*(tid + 1)) - A_i;
+  int iBegin, iEnd;
+  getLoadBalancedPartition(&iBegin, &iEnd, rowptr, m);
 
   int i, j;
-  memset(bucket + tid*num_colsA, 0, sizeof(int)*num_colsA);
+  memset(bucket + tid*n, 0, sizeof(int)*n);
 
   // count the number of keys that will go into each bucket
-  for (j = A_i[iBegin]; j < A_i[iEnd]; ++j) {
-    int idx = A_j[j];
+  for (j = rowptr[iBegin]; j < rowptr[iEnd]; ++j) {
+    int idx = colidx[j];
 #ifndef NDEBUG
-    if (idx < 0 || idx >= num_colsA) {
-      printf("tid = %d num_rowsA = %d num_colsA = %d num_nonzerosA = %d iBegin = %d iEnd = %d A_i[iBegin] = %d A_i[iEnd] = %d j = %d idx = %d\n", tid, num_rowsA, num_colsA, num_nonzerosA, iBegin, iEnd, A_i[iBegin], A_i[iEnd], j, idx);
+    if (idx < 0 || idx >= n) {
+      printf("tid = %d m = %d n = %d nnz = %d iBegin = %d iEnd = %d rowptr[iBegin] = %d rowptr[iEnd] = %d j = %d idx = %d\n", tid, m, n, nnz, iBegin, iEnd, rowptr[iBegin], rowptr[iEnd], j, idx);
     }
 #endif
-    assert(idx >= 0 && idx < num_colsA);
-    bucket[tid*num_colsA + idx]++;
+    assert(idx >= 0 && idx < n);
+    bucket[tid*n + idx]++;
   }
-  // up to here, bucket is used as int[nthreads][num_colsA] 2D array
+  // up to here, bucket is used as int[nthreads][n] 2D array
 
   // prefix sum
 #pragma omp barrier
 
-  for (i = tid*num_colsA + 1; i < (tid + 1)*num_colsA; ++i) {
-    int transpose_i = transpose_idx(i, nthreads, num_colsA);
-    int transpose_i_minus_1 = transpose_idx(i - 1, nthreads, num_colsA);
+  for (i = tid*n + 1; i < (tid + 1)*n; ++i) {
+    int transpose_i = transpose_idx(i, nthreads, n);
+    int transpose_i_minus_1 = transpose_idx(i - 1, nthreads, n);
 
     bucket[transpose_i] += bucket[transpose_i_minus_1];
   }
@@ -478,9 +468,9 @@ CSR *CSR::transpose() const
 #pragma omp master
   {
     for (i = 1; i < nthreads; ++i) {
-      int j0 = num_colsA*i - 1, j1 = num_colsA*(i + 1) - 1;
-      int transpose_j0 = transpose_idx(j0, nthreads, num_colsA);
-      int transpose_j1 = transpose_idx(j1, nthreads, num_colsA);
+      int j0 = n*i - 1, j1 = n*(i + 1) - 1;
+      int transpose_j0 = transpose_idx(j0, nthreads, n);
+      int transpose_j1 = transpose_idx(j1, nthreads, n);
 
       bucket[transpose_j1] += bucket[transpose_j0];
     }
@@ -488,10 +478,10 @@ CSR *CSR::transpose() const
 #pragma omp barrier
 
   if (tid > 0) {
-    int transpose_i0 = transpose_idx(num_colsA*tid - 1, nthreads, num_colsA);
+    int transpose_i0 = transpose_idx(n*tid - 1, nthreads, n);
 
-    for (i = tid*num_colsA; i < (tid + 1)*num_colsA - 1; ++i) {
-      int transpose_i = transpose_idx(i, nthreads, num_colsA);
+    for (i = tid*n; i < (tid + 1)*n - 1; ++i) {
+      int transpose_i = transpose_idx(i, nthreads, n);
 
       bucket[transpose_i] += bucket[transpose_i0];
     }
@@ -499,39 +489,42 @@ CSR *CSR::transpose() const
 
 #pragma omp barrier
 
-  if (A_data) {
+  if (values) {
     for (i = iEnd - 1; i >= iBegin; --i) {
-      for (j = A_i[i + 1] - 1; j >= A_i[i]; --j) {
-        int idx = A_j[j];
-        --bucket[tid*num_colsA + idx];
+      for (j = rowptr[i + 1] - 1; j >= rowptr[i]; --j) {
+        int idx = colidx[j];
+        --bucket[tid*n + idx];
 
-        int offset = bucket[tid*num_colsA + idx];
+        int offset = bucket[tid*n + idx];
 
-        assert(offset >= 0 && offset < num_nonzerosA);
-        AT_data[offset] = A_data[j];
-        AT_j[offset] = i;
+        assert(offset >= 0 && offset < nnz);
+        AT->values[offset] = values[j];
+        AT->colidx[offset] = i;
       }
     }
   }
   else {
     for (i = iEnd - 1; i >= iBegin; --i) {
-      for (j = A_i[i + 1] - 1; j >= A_i[i]; --j) {
-        int idx = A_j[j];
-        --bucket[tid*num_colsA + idx];
+      for (j = rowptr[i + 1] - 1; j >= rowptr[i]; --j) {
+        int idx = colidx[j];
+        --bucket[tid*n + idx];
 
-        int offset = bucket[tid*num_colsA + idx];
+        int offset = bucket[tid*n + idx];
 
-        AT_j[offset] = i;
+        AT->colidx[offset] = i;
       }
     }
   }
 
   if (diagptr) {
 #pragma omp barrier
+
+    bucket[n] = nnz;
+
 #pragma omp for
-    for (int i = 0; i < num_colsA; i++) {
+    for (int i = 0; i < n; i++) {
       for (int j = bucket[i]; j < bucket[i + 1]; ++j) {
-        int c = AT_j[j];
+        int c = AT->colidx[j];
         if (c == i) AT->diagptr[i] = j;
       }
     }
@@ -539,7 +532,7 @@ CSR *CSR::transpose() const
 
   } // omp parallel
 
-  bucket[num_colsA] = num_nonzerosA;
+  bucket[n] = nnz;
   AT->rowptr = bucket; 
 
   return AT;

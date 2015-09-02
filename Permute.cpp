@@ -37,16 +37,14 @@ void CSR::permuteRowptr(CSR *ret, const int *reversePerm) const
   ret->rowptr[0] = 0;
 
   int rowPtrSum[omp_get_max_threads() + 1];
-  rowPtrSum[0] = 0;
 
 #pragma omp parallel
   {
     int nthreads = omp_get_num_threads();
     int tid = omp_get_thread_num();
 
-    int iPerThread = (m + nthreads - 1)/nthreads;
-    int iBegin = min(iPerThread*tid, m);
-    int iEnd = min(iBegin + iPerThread, m);
+    int iBegin, iEnd;
+    getSimpleThreadPartition(&iBegin, &iEnd, m);
 
     ret->rowptr[iBegin] = 0;
     int i;
@@ -58,31 +56,21 @@ void CSR::permuteRowptr(CSR *ret, const int *reversePerm) const
         ret->extptr[i] = ret->rowptr[i] + extptr[row] - rowptr[row];
       }
     }
+    int localNnz = 0;
     if (i < iEnd) {
       int row = reversePerm ? reversePerm[i] : i;
       int begin = rowptr[row], end = rowptr[row + 1];
-      rowPtrSum[tid + 1] = ret->rowptr[i] + end - begin;
+      localNnz = ret->rowptr[i] + end - begin;
       if (extptr) {
         ret->extptr[i] = ret->rowptr[i] + extptr[row] - rowptr[row];
       }
     }
-    else {
-      rowPtrSum[tid + 1] = 0;
-    }
 
-#pragma omp barrier
-#pragma omp master
-    {
-      for (int tid = 1; tid < nthreads; ++tid) {
-        rowPtrSum[tid + 1] += rowPtrSum[tid];
-      }
-      ret->rowptr[m] = rowPtrSum[nthreads];
-    }
-#pragma omp barrier
+    prefixSum(&localNnz, &ret->rowptr[m], rowPtrSum);
 
     for (i = iBegin; i < iEnd; ++i) {
-      ret->rowptr[i] += rowPtrSum[tid];
-      if (ret->extptr) ret->extptr[i] += rowPtrSum[tid];
+      ret->rowptr[i] += localNnz;
+      if (ret->extptr) ret->extptr[i] += localNnz;
     }
   } // omp parallel
 }
@@ -197,17 +185,8 @@ static void permuteMain_(
 
 #pragma omp parallel
   {
-    int tid = omp_get_thread_num();
-    int nthreads = omp_get_num_threads();
-
-    int nnzPerThread = (nnz + nthreads - 1)/nthreads;
-    int iBegin = lower_bound(out->rowptr, out->rowptr + m, nnzPerThread*tid + BASE) - out->rowptr;
-    if (tid == 0) iBegin = 0;
-    int iEnd = lower_bound(out->rowptr, out->rowptr + m, nnzPerThread*(tid + 1) + BASE) - out->rowptr;
-    if (tid == nthreads - 1) iEnd = m;
-    assert(iBegin <= iEnd);
-    assert(iBegin >= 0 && iBegin <= m);
-    assert(iEnd >= 0 && iEnd <= m);
+    int iBegin, iEnd;
+    getLoadBalancedPartition(&iBegin, &iEnd, out->rowptr, m);
 
     for (int i = iBegin; i < iEnd; ++i) {
       int row = rowInversePerm ? rowInversePerm[i] : i;
@@ -299,17 +278,8 @@ static void permuteRowsMain_(
 
 #pragma omp parallel
   {
-    int tid = omp_get_thread_num();
-    int nthreads = omp_get_num_threads();
-
-    int nnzPerThread = (nnz + nthreads - 1)/nthreads;
-    int iBegin = lower_bound(out->rowptr, out->rowptr + m, nnzPerThread*tid + BASE) - out->rowptr;
-    if (tid == 0) iBegin = 0;
-    int iEnd = lower_bound(out->rowptr, out->rowptr + m, nnzPerThread*(tid + 1) + BASE) - out->rowptr;
-    if (tid == nthreads - 1) iEnd = m;
-    assert(iBegin <= iEnd);
-    assert(iBegin >= 0 && iBegin <= m);
-    assert(iEnd >= 0 && iEnd <= m);
+    int iBegin, iEnd;
+    getLoadBalancedPartition(&iBegin, &iEnd, out->rowptr, m);
 
     for (int i = iBegin; i < iEnd; ++i) {
       int row = rowInversePerm ? rowInversePerm[i] : i;

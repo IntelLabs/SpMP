@@ -36,9 +36,8 @@ void splitLU(const CSR& A, CSR *L, CSR *U)
     int nthreads = omp_get_num_threads();
     int tid = omp_get_thread_num();
 
-    int iPerThread = (A.m + nthreads - 1)/nthreads;
-    int iBegin = min(tid*iPerThread, A.m);
-    int iEnd = min(iBegin + iPerThread, A.m);
+    int iBegin, iEnd;
+    getSimpleThreadPartition(&iBegin, &iEnd, A.m);
 
     // count # of nnz per row
     int sum0 = 0, sum1 = 0;
@@ -132,12 +131,10 @@ bool getSymmetricNnzPattern(
 
 #pragma omp parallel
   {
-    int nthreads = omp_get_num_threads();
     int tid = omp_get_thread_num();
 
-    int iPerThread = (m + nthreads - 1)/nthreads;
-    int iBegin = min(iPerThread*tid, m);
-    int iEnd = min(iBegin + iPerThread, m);
+    int iBegin, iEnd;
+    getSimpleThreadPartition(&iBegin, &iEnd, m);
 
 #ifdef PRINT_TIME_BREAKDOWN
     unsigned long long t = __rdtsc();
@@ -270,20 +267,25 @@ bool getSymmetricNnzPattern(
   FREE(cnts);
 
 #ifndef NDEBUG
-  CSR sym;
-  sym.m = m;
-  sym.n = m;
-  sym.rowptr = *symRowPtr;
-  sym.colidx = *symColIdx;
-  sym.diagptr = *symDiagPtr;
-  sym.extptr = *symExtPtr;
+  if (isSymmetric) {
+    assert(A->isSymmetric(false, true));
+  }
+  else {
+    CSR sym;
+    sym.m = m;
+    sym.n = m;
+    sym.rowptr = *symRowPtr;
+    sym.colidx = *symColIdx;
+    sym.diagptr = *symDiagPtr;
+    sym.extptr = *symExtPtr;
 
-  assert(sym.isSymmetric(false, true));
+    assert(sym.isSymmetric(false, true));
 
-  sym.rowptr = NULL;
-  sym.colidx = NULL;
-  sym.diagptr = NULL;
-  sym.extptr = NULL;
+    sym.rowptr = NULL;
+    sym.colidx = NULL;
+    sym.diagptr = NULL;
+    sym.extptr = NULL;
+  }
 #endif
 
   return isSymmetric;

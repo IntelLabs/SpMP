@@ -55,9 +55,46 @@ bool correctnessCheck(
   return true;
 }
 
+/**
+ * @note must be called inside an omp region
+ */
 void getSimpleThreadPartition(int* begin, int *end, int n);
 
+/**
+ * Get a load balanced partition so that each thread can work on
+ * the range of begin-end where prefixSum[end] - prefixSum[begin]
+ * is similar among threads.
+ * For example, prefixSum can be rowptr of a CSR matrix and n can be
+ * the number of rows. Then, each thread will work on similar number
+ * of non-zeros.
+ *
+ * @params prefixSum monotonically increasing array with length n + 1
+ *
+ * @note must be called inside an omp region
+ */
+void getLoadBalancedPartition(int *begin, int *end, const int *prefixSum, int n);
+
 void getInversePerm(int *inversePerm, const int *perm, int n);
+
+/**
+ * Let x_i be the input of ith thread.
+ * The output of ith thread y_i = x_0 + x_1 + ... + x_{i-1}
+ * Additionally, sum = x_0 + x_1 + ... + x_{nthreads - 1}
+ * Note that always y_0 = 0
+ *
+ * @param workspace at least with length (nthreads + 1)
+ *
+ * @note must be called inside an omp region
+ */
+void prefixSum(int *inOut, int *sum, int *workspace);
+/**
+ * workspace[n*tid:n*(tid+1)-1] contains results for tid
+ *
+ * @param workspace at least with length n*(nthreads + 1)
+ *
+ * @note must be called inside an omp region
+ */
+void prefixSumMultiple(int *inOut, int *sum, int n, int *workspace);
 
 /**
  * @return true if perm array is a permutation

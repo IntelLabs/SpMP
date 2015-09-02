@@ -50,16 +50,8 @@ static void SpMV_(
 
 #pragma omp parallel
   {
-    int tid = omp_get_thread_num();
-    int nthreads = omp_get_num_threads();
-
-    int nnz = rowptr[m] - BASE;
-    int nnzPerThread = (nnz + nthreads - 1)/nthreads;
-    int iBegin = lower_bound(rowptr, rowptr + m, nnzPerThread*tid + BASE) - rowptr;
-    int iEnd = lower_bound(rowptr, rowptr + m, nnzPerThread*(tid + 1) + BASE) - rowptr;
-    assert(iBegin <= iEnd);
-    assert(iBegin >= 0 && iBegin <= m);
-    assert(iEnd >= 0 && iEnd <= m);
+    int iBegin, iEnd;
+    getLoadBalancedPartition(&iBegin, &iEnd, rowptr, m);
 
     if (1 == alpha && 0 == beta && 0 == gamma) {
       for (int i = iBegin; i < iEnd; ++i) {
@@ -138,16 +130,8 @@ static void SpMDM_(
 
 #pragma omp parallel
   {
-    int tid = omp_get_thread_num();
-    int nthreads = omp_get_num_threads();
-
-    int nnz = rowptr[m] - BASE;
-    int nnzPerThread = (nnz + nthreads - 1)/nthreads;
-    int iBegin = lower_bound(rowptr, rowptr + m, nnzPerThread*tid + BASE) - rowptr;
-    int iEnd = lower_bound(rowptr, rowptr + m, nnzPerThread*(tid + 1) + BASE) - rowptr;
-    assert(iBegin <= iEnd);
-    assert(iBegin >= 0 && iBegin <= m);
-    assert(iEnd >= 0 && iEnd <= m);
+    int iBegin, iEnd;
+    getLoadBalancedPartition(&iBegin, &iEnd, rowptr, m);
 
     T sum[k];
     if (1 == alpha && 0 == beta && 0 == gamma && 1 == wRowStride && 1 == xRowStride && 1 == yRowStride) {
