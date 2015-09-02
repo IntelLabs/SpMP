@@ -1361,7 +1361,9 @@ void LevelSchedule::findLevels(
 {
 #ifndef NDEBUG
   CSR A(m, m, (int *)rowptr, (int *)colidx, (double *)NULL);
+  A.extptr = (int *)extptr;
   assert(A.isSymmetric(false));
+  A.extptr = NULL;
   A.~CSR();
 #endif
 
