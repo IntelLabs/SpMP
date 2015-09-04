@@ -505,7 +505,6 @@ CSR *CSR::transpose() const
       int transpose_j1 = transpose_idx(j1, nthreads, n);
 
       bucket[transpose_j1 + base] += bucket[transpose_j0 + base];
-      printf("%d\n", bucket[transpose_j1 + base]);
     }
   }
 #pragma omp barrier
