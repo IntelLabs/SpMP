@@ -31,7 +31,7 @@ using namespace std;
 namespace SpMP
 {
 
-template<class T, int BASE = 0>
+template<class T>
 static void SpMV_(
   int m,
   T *w,
@@ -42,6 +42,16 @@ static void SpMV_(
   const T *y,
   T gamma)
 {
+  int base = rowptr[0];
+
+  rowptr -= base;
+  colidx -= base;
+  values -= base;
+
+  w -= base;
+  x -= base;
+  y -= base;
+
 //#define MEASURE_LOAD_BALANCE
 #ifdef MEASURE_LOAD_BALANCE
   double barrierTimes[omp_get_max_threads()];
@@ -51,13 +61,15 @@ static void SpMV_(
 #pragma omp parallel
   {
     int iBegin, iEnd;
-    getLoadBalancedPartition(&iBegin, &iEnd, rowptr, m);
+    getLoadBalancedPartition(&iBegin, &iEnd, rowptr + base, m);
+    iBegin += base;
+    iEnd += base;
 
     if (1 == alpha && 0 == beta && 0 == gamma) {
       for (int i = iBegin; i < iEnd; ++i) {
         T sum = 0;
-        for (int j = rowptr[i] - BASE; j < rowptr[i + 1] - BASE; ++j) {
-          sum += values[j]*x[colidx[j] - BASE];
+        for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+          sum += values[j]*x[colidx[j]];
         }
         w[i] = sum;
       }
@@ -65,8 +77,8 @@ static void SpMV_(
     else {
       for (int i = iBegin; i < iEnd; ++i) {
         T sum = 0;
-        for (int j = rowptr[i] - BASE; j < rowptr[i + 1] - BASE; ++j) {
-          sum += values[j]*x[colidx[j] - BASE];
+        for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+          sum += values[j]*x[colidx[j]];
         }
         w[i] = alpha*sum + beta*y[i] + gamma;
       }
@@ -96,13 +108,7 @@ void CSR::multiplyWithVector(
   double alpha, const double *x, double beta, const double *y, double gamma)
   const
 {
-  if (0 == base) {
-    SpMV_<double, 0>(m, w, alpha, rowptr, colidx, values, x, beta, y, gamma);
-  }
-  else {
-    assert(1 == base);
-    SpMV_<double, 1>(m, w, alpha, rowptr, colidx, values, x, beta, y, gamma);
-  }
+  SpMV_<double>(m, w, alpha, rowptr, colidx, values, x, beta, y, gamma);
 }
 
 void CSR::multiplyWithVector(double *w, const double *x) const
@@ -110,7 +116,7 @@ void CSR::multiplyWithVector(double *w, const double *x) const
   return multiplyWithVector(w, 1, x, 0, w, 0);
 }
 
-template<class T, int BASE = 0>
+template<class T>
 static void SpMDM_(
   int m,
   int k, // width of W, X, and Y
@@ -122,6 +128,16 @@ static void SpMDM_(
   const T *Y, int yRowStride, int yColumnStride,
   T gamma)
 {
+  int base = rowptr[0];
+
+  rowptr -= base;
+  colidx -= base;
+  values -= base;
+
+  W -= base;
+  X -= base;
+  Y -= base;
+
 //#define MEASURE_LOAD_BALANCE
 #ifdef MEASURE_LOAD_BALANCE
   double barrierTimes[omp_get_max_threads()];
@@ -131,7 +147,9 @@ static void SpMDM_(
 #pragma omp parallel
   {
     int iBegin, iEnd;
-    getLoadBalancedPartition(&iBegin, &iEnd, rowptr, m);
+    getLoadBalancedPartition(&iBegin, &iEnd, rowptr + base, m);
+    iBegin += base;
+    iEnd += base;
 
     T sum[k];
     if (1 == alpha && 0 == beta && 0 == gamma && 1 == wRowStride && 1 == xRowStride && 1 == yRowStride) {
@@ -139,9 +157,9 @@ static void SpMDM_(
         for (int i3 = 0; i3 < k; ++i3) {
           sum[i3] = 0;
         }
-        for (int i2 = rowptr[i1] - BASE; i2 < rowptr[i1 + 1] - BASE; ++i2) {
+        for (int i2 = rowptr[i1]; i2 < rowptr[i1 + 1]; ++i2) {
           for (int i3 = 0; i3 < k; ++i3) {
-            sum[i3] += values[i2]*X[colidx[i2] - BASE + i3*xColumnStride];
+            sum[i3] += values[i2]*X[colidx[i2] + i3*xColumnStride];
           }
         }
         for (int i3 = 0; i3 < k; ++i3) {
@@ -154,9 +172,9 @@ static void SpMDM_(
         for (int i3 = 0; i3 < k; ++i3) {
           sum[i3] = 0;
         }
-        for (int i2 = rowptr[i1] - BASE; i2 < rowptr[i1 + 1] - BASE; ++i2) {
+        for (int i2 = rowptr[i1]; i2 < rowptr[i1 + 1]; ++i2) {
           for (int i3 = 0; i3 < k; ++i3) {
-            sum[i3] += values[i2]*X[(colidx[i2] - BASE)*xRowStride + i3*xColumnStride];
+            sum[i3] += values[i2]*X[colidx[i2]*xRowStride + i3*xColumnStride];
           }
         }
         for (int i3 = 0; i3 < k; ++i3) {
@@ -192,27 +210,14 @@ void CSR::multiplyWithDenseMatrix(
   double beta, const double *Y, int yRowStride, int yColumnStride,
   double gamma) const
 {
-  if (0 == base) {
-    SpMDM_<double, 0>(
-      m, k,
-      W, wRowStride, wColumnStride,
-      alpha, rowptr, colidx, values,
-      X, xRowStride, xColumnStride,
-      beta,
-      Y, yRowStride, yColumnStride,
-      gamma);
-  }
-  else {
-    assert(1 == base);
-    SpMDM_<double, 1>(
-      m, k,
-      W, wRowStride, wColumnStride,
-      alpha, rowptr, colidx, values,
-      X, xRowStride, xColumnStride,
-      beta,
-      Y, yRowStride, yColumnStride,
-      gamma);
-  }
+  SpMDM_<double>(
+    m, k,
+    W, wRowStride, wColumnStride,
+    alpha, rowptr, colidx, values,
+    X, xRowStride, xColumnStride,
+    beta,
+    Y, yRowStride, yColumnStride,
+    gamma);
 }
 
 void CSR::multiplyWithDenseMatrix(double *W, int k, const double *X) const

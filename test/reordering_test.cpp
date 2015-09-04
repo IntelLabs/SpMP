@@ -83,7 +83,7 @@ int main(int argc, char **argv)
     return -1;
   }
 
-  CSR *A = new CSR(argv[1], true /* force-symmetric */);
+  CSR *A = new CSR(argv[1], 0, true /* force-symmetric */);
   int nnz = A->rowptr[A->m];
   double flops = 2*nnz;
   double bytes = (sizeof(double) + sizeof(int))*nnz;

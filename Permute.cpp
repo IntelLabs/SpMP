@@ -34,7 +34,7 @@ namespace SpMP
 
 void CSR::permuteRowptr(CSR *ret, const int *reversePerm) const
 {
-  ret->rowptr[0] = 0;
+  int base = getBase();
 
   int rowPtrSum[omp_get_max_threads() + 1];
 
@@ -67,12 +67,16 @@ void CSR::permuteRowptr(CSR *ret, const int *reversePerm) const
     }
 
     prefixSum(&localNnz, &ret->rowptr[m], rowPtrSum);
+    localNnz += base;
 
     for (i = iBegin; i < iEnd; ++i) {
       ret->rowptr[i] += localNnz;
       if (ret->extptr) ret->extptr[i] += localNnz;
     }
   } // omp parallel
+
+  ret->rowptr[m] += base;
+  assert(ret->rowptr[m] == rowptr[m]);
 }
 
 CSR *CSR::permuteRowptr(const int *reversePerm) const
@@ -109,32 +113,32 @@ void permuteColsInPlace_(CSR *A, const int *perm)
 {
   assert(perm);
 
-  const int *rowptr = A->rowptr;
-  const int *extptr = A->extptr ? A->extptr : rowptr + 1;
-  int *diagptr = A->diagptr;
+  const int *rowptr = A->rowptr - BASE;
+  const int *extptr = A->extptr ? A->extptr - BASE: rowptr + 1;
+  int *diagptr = A->diagptr ? A->diagptr - BASE : NULL;
 
-  int *colidx = A->colidx;
-  T *values = A->values;
+  int *colidx = A->colidx - BASE;
+  T *values = A->values - BASE;
 
   int m = A->m;
 
 #pragma omp parallel for
-  for (int i = 0; i < m; ++i) {
+  for (int i = BASE; i < m + BASE; ++i) {
     int diagCol = -1;
-    for (int j = rowptr[i] - BASE; j < extptr[i] - BASE; ++j) {
-      int c = colidx[j] - BASE;
+    for (int j = rowptr[i]; j < extptr[i]; ++j) {
+      int c = colidx[j];
       assert(c >= 0 && c < m);
-      colidx[j] = perm[c] + BASE;
+      colidx[j] = perm[c - BASE] + BASE;
       assert(colidx[j] - BASE >= 0 && colidx[j] - BASE < m);
-      if (c == i) diagCol = perm[c] + BASE;
+      if (c == i) diagCol = perm[c - BASE] + BASE;
     }
 
-    for (int j = rowptr[i] + 1 - BASE; j < extptr[i] - BASE; ++j) {
+    for (int j = rowptr[i] + 1; j < extptr[i]; ++j) {
       int c = colidx[j];
       double v = values[j];
 
       int k = j - 1;
-      while (k >= rowptr[i] - BASE & colidx[k] > c) {
+      while (k >= rowptr[i] & colidx[k] > c) {
         colidx[k + 1] = colidx[k];
         values[k + 1] = values[k];
         --k;
@@ -145,9 +149,9 @@ void permuteColsInPlace_(CSR *A, const int *perm)
     }
 
     if (diagptr) {
-      for (int j = rowptr[i] - BASE; j < extptr[i] - BASE; ++j) {
+      for (int j = rowptr[i]; j < extptr[i]; ++j) {
         if (colidx[j] == diagCol) {
-          diagptr[i] = j + BASE;
+          diagptr[i] = j;
           break;
         }
       }
@@ -157,11 +161,11 @@ void permuteColsInPlace_(CSR *A, const int *perm)
 
 void CSR::permuteColsInPlace(const int *perm)
 {
-  if (0 == base) {
+  if (0 == getBase()) {
     permuteColsInPlace_<double, 0>(this, perm);
   }
   else {
-    assert(1 == base);
+    assert(1 == getBase());
     permuteColsInPlace_<double, 1>(this, perm);
   }
 }
@@ -171,36 +175,45 @@ static void permuteMain_(
   CSR *out, const CSR *in,
   const int *columnPerm, const int *rowInversePerm)
 {
-  const int *rowptr = in->rowptr;
-  const int *colidx = in->colidx;
-  const int *diagptr = in->diagptr;
-  const T *values = in->values;
-  const T *idiag = in->idiag;
-
   int m = in->m;
-  int nnz = rowptr[m] - BASE;
 
-  const int *extptr = in->extptr ? in->extptr : rowptr + 1;
-  const int *newExtptr = out->extptr ? out->extptr : out->rowptr + 1;
+  const int *rowptr = in->rowptr - BASE;
+  const int *diagptr = in->diagptr ? in->diagptr - BASE : NULL;
+  const int *extptr = in->extptr ? in->extptr - BASE : rowptr + 1;
+  const int *colidx = in->colidx - BASE;
+  const T *values = in->values - BASE;
+  const T *idiag = in->idiag ? in->idiag - BASE : NULL;
+
+  int *newRowptr = out->rowptr - BASE;
+  int *newDiagptr = out->diagptr ? out->diagptr - BASE : NULL;
+  int *newExtptr = out->extptr ? out->extptr - BASE : newRowptr + 1;
+  int *newColidx = out->colidx - BASE;
+  T *newValues = out->values - BASE;
+  T *newIdiag = out->idiag ? out->idiag - BASE : NULL;
+
+  columnPerm -= BASE;
+  if (rowInversePerm) rowInversePerm -= BASE;
 
 #pragma omp parallel
   {
     int iBegin, iEnd;
-    getLoadBalancedPartition(&iBegin, &iEnd, out->rowptr, m);
+    getLoadBalancedPartition(&iBegin, &iEnd, newRowptr + BASE, m);
+    iBegin += BASE;
+    iEnd += BASE;
 
     for (int i = iBegin; i < iEnd; ++i) {
-      int row = rowInversePerm ? rowInversePerm[i] : i;
-      int begin = rowptr[row] - BASE, end = extptr[row] - BASE;
-      int newBegin = out->rowptr[i] - BASE;
+      int row = rowInversePerm ? rowInversePerm[i] + BASE : i;
+      int begin = rowptr[row], end = extptr[row];
+      int newBegin = newRowptr[i];
 
       int diagCol = -1;
       int k = newBegin;
       for (int j = begin; j < end; ++j, ++k) {
-        int colIdx = colidx[j] - BASE;
-        int newColIdx = columnPerm[colIdx];
+        int colIdx = colidx[j];
+        int newColIdx = columnPerm[colIdx] + BASE;
 
-        out->colidx[k] = newColIdx + BASE;
-        out->values[k] = values[j];
+        newColidx[k] = newColIdx;
+        newValues[k] = values[j];
 
         if (diagptr && colidx[j] == row) {
           diagCol = newColIdx;
@@ -211,27 +224,27 @@ static void permuteMain_(
       if (SORT) {
         // insertion sort
         for (int j = newBegin + 1; j < newExtptr[i]; ++j) {
-          int c = out->colidx[j];
-          double v = out->values[j];
+          int c = newColidx[j];
+          double v = newValues[j];
 
           int k = j - 1;
-          while (k >= newBegin && out->colidx[k] > c) {
-            out->colidx[k + 1] = out->colidx[k];
-            out->values[k + 1] = out->values[k];
+          while (k >= newBegin && newColidx[k] > c) {
+            newColidx[k + 1] = newColidx[k];
+            newValues[k + 1] = newValues[k];
             --k;
           }
 
-          out->colidx[k + 1] = c;
-          out->values[k + 1] = v;
+          newColidx[k + 1] = c;
+          newValues[k + 1] = v;
         }
       }
 
-      if (idiag) out->idiag[i] = idiag[row];
+      if (idiag) newIdiag[i] = idiag[row];
 
       if (diagptr) {
         for (int j = newBegin; j < newExtptr[i]; ++j) {
-          if (out->colidx[j] == diagCol) {
-            out->diagptr[i] = j;
+          if (newColidx[j] == diagCol) {
+            newDiagptr[i] = j;
             break;
           }
         }
@@ -244,7 +257,7 @@ void CSR::permuteMain(
   CSR *out, const int *columnPerm, const int *rowInversePerm,
   bool sort /*=false*/) const
 {
-  if (0 == base) {
+  if (0 == getBase()) {
     if (sort) {
       permuteMain_<double, 0, true>(out, this, columnPerm, rowInversePerm);
     }
@@ -253,7 +266,7 @@ void CSR::permuteMain(
     }
   }
   else {
-    assert(1 == base);
+    assert(1 == getBase());
     if (sort) {
       permuteMain_<double, 1, true>(out, this, columnPerm, rowInversePerm);
     }
@@ -267,23 +280,24 @@ template<class T, int BASE = 0>
 static void permuteRowsMain_(
   CSR *out, const CSR *in, const int *rowInversePerm)
 {
-  const int *rowptr = in->rowptr;
-  const int *colidx = in->colidx;
-  const int *diagptr = in->diagptr;
-  const T *values = in->values;
-  const T *idiag = in->idiag;
+  const int *rowptr = in->rowptr - BASE;
+  const int *colidx = in->colidx - BASE;
+  const int *diagptr = in->diagptr ? in->diagptr - BASE : NULL;
+  const T *values = in->values - BASE;
+  const T *idiag = in->idiag ? in->idiag - BASE : NULL;
 
   int m = in->m;
-  int nnz = rowptr[m] - BASE;
 
 #pragma omp parallel
   {
     int iBegin, iEnd;
-    getLoadBalancedPartition(&iBegin, &iEnd, out->rowptr, m);
+    getLoadBalancedPartition(&iBegin, &iEnd, out->rowptr + BASE, m);
+    iBegin += BASE;
+    iEnd += BASE;
 
     for (int i = iBegin; i < iEnd; ++i) {
-      int row = rowInversePerm ? rowInversePerm[i] : i;
-      int begin = rowptr[row] - BASE, end = rowptr[row + 1] - BASE;
+      int row = rowInversePerm ? rowInversePerm[i - BASE] + BASE : i;
+      int begin = rowptr[row], end = rowptr[row + 1];
       int newBegin = out->rowptr[i] - BASE;
 
       memcpy(out->values + newBegin, values + begin, (end - begin)*sizeof(double));
@@ -299,11 +313,11 @@ static void permuteRowsMain_(
 
 void CSR::permuteRowsMain(CSR *out, const int *rowInversePerm) const
 {
-  if (0 == base) {
+  if (0 == getBase()) {
     permuteRowsMain_<double, 0>(out, this, rowInversePerm);
   }
   else {
-    assert(1 == base);
+    assert(1 == getBase());
     permuteRowsMain_<double, 1>(out, this, rowInversePerm);
   }
 }

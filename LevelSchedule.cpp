@@ -133,25 +133,21 @@ void LevelSchedule::constructTaskGraph(const CSR& A)
 
 void LevelSchedule::constructTaskGraph(const CSR& A, const CostFunction& costFunction)
 {
-  bool was1Based = 1 == A.base;
-  ((CSR *)&A)->make0BasedIndexing();
   assert(A.isSymmetric(false));
   constructTaskGraph(A.m, A.rowptr, A.diagptr, A.extptr, A.colidx, costFunction);
-  if (was1Based) {
-    ((CSR *)&A)->make1BasedIndexing();
-  }
 }
 
-static int *constructDiagPtr(
+template<int BASE = 0>
+static int *constructDiagPtr_(
   int m, const int *rowptr, const int *colidx)
 {
   int *diagptr = MALLOC(int, m);
 #pragma omp parallel for
   for (int i = 0; i < m; ++i) {
-    for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
-      if (colidx[j] >= i) {
-	diagptr[i] = j;
-	break;
+    for (int j = rowptr[i] - BASE; j < rowptr[i + 1] - BASE; ++j) {
+      if (colidx[j] - BASE >= i) {
+        diagptr[i] = j + BASE;
+        break;
       }
     }
   }
@@ -161,7 +157,14 @@ static int *constructDiagPtr(
 void LevelSchedule::constructTaskGraph(
   int m, const int *rowptr, const int *colidx, const CostFunction& costFunction)
 {
-  int *diagptr = constructDiagPtr(m, rowptr, colidx);
+  int *diagptr;
+  if (0 == rowptr[0]) {
+    diagptr = constructDiagPtr_<0>(m, rowptr, colidx);
+  }
+  else {
+    assert(1 == rowptr[0]);
+    diagptr = constructDiagPtr_<1>(m, rowptr, colidx);
+  }
 
   constructTaskGraph(m, rowptr, diagptr, NULL, colidx, costFunction);
 
@@ -177,18 +180,651 @@ void LevelSchedule::constructTaskGraph(
 
 #define NUM_MAX_THREADS (2048)
 
-void LevelSchedule::constructTaskGraph(
+template<int BASE = 0>
+static
+void findLevels_(
+  int *qTail, int *nnzPrefixSum, int *nparents, int **q, int **rowPtrs,
+  const int *diagptr, const int *extptr,
+  const int *colidx,
+  int *reversePerm, vector<int>& levIndices,
   int m,
-  const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
+  unsigned long long &tt2, unsigned long long &tt3, unsigned long long &tt4, unsigned long long &tt5, unsigned long long &tt6)
+{
+  colidx -= BASE;
+
+  int qTailPrefixSum[NUM_MAX_THREADS] = { 0 };
+  volatile int endSynchronized[1] = { 0 };
+
+#ifdef LOADIMBA
+  synk::LoadImba *bar = synk::LoadImba::getInstance();
+#else
+  synk::Barrier *bar = synk::Barrier::getInstance();
+#endif
+
+#pragma omp parallel
+  {
+  int tid = omp_get_thread_num();
+  int nthreads = omp_get_num_threads();
+
+  bool prevIterSerial = false;
+  unsigned long long tTemp = __rdtsc();
+
+  int end = 0;
+
+  while (true) { // until all nodes are visited
+    bool currIterSerial = false;
+    int begin = end;
+
+    if (prevIterSerial) {
+      if (0 == tid) {
+        if (qTail[0] == 0) {
+          bar->wait(tid); // wake up other threads
+          break;
+        }
+#define THRESH 64
+        currIterSerial = qTail[0] < THRESH*2;
+        if (!currIterSerial) {
+          *endSynchronized = begin;
+          bar->wait(tid); // wake up other threads
+          end = begin + qTail[0];
+
+          qTailPrefixSum[1] = qTail[0];
+          bar->wait(tid);
+        }
+        else {
+          end = begin + qTail[0];
+        }
+      }
+      else {
+        currIterSerial = false;
+
+        begin = *endSynchronized;
+        end = begin + qTail[0];
+        qTailPrefixSum[tid + 1] = qTail[0];
+        nnzPrefixSum[tid + 1] = nnzPrefixSum[1];
+        bar->wait(tid);
+      }
+    }
+    else {
+      tTemp = __rdtsc();
+      bar->wait(tid);
+      if (0 == tid) tt2 += __rdtsc() - tTemp;
+
+      tTemp = __rdtsc();
+
+      // compute prefix sum of # of discovered nodes and nnzs associated with them
+#pragma omp single
+      {
+        for (int t = 0; t < nthreads; ++t) {
+          qTailPrefixSum[t + 1] = qTailPrefixSum[t] + qTail[t*16];
+          nnzPrefixSum[t + 1] += nnzPrefixSum[t];
+        }
+      }
+
+      if (0 == tid) tt3 += __rdtsc() - tTemp;
+
+      if (qTailPrefixSum[nthreads] == 0) break;
+      currIterSerial = qTailPrefixSum[nthreads] < THRESH;
+
+      tTemp = __rdtsc();
+
+      int begin = end;
+      end = begin + qTailPrefixSum[nthreads];
+
+      int iPerThread = (qTailPrefixSum[nthreads] + nthreads - 1)/nthreads;
+      int iBegin = min(begin + iPerThread*tid, end);
+      int iEnd = min(iBegin + iPerThread, end);
+
+      int tBegin = upper_bound(
+          qTailPrefixSum, qTailPrefixSum + nthreads + 1,
+          iPerThread*tid) -
+        qTailPrefixSum - 1;
+      int tEnd = upper_bound(
+          qTailPrefixSum, qTailPrefixSum + nthreads + 1,
+          iPerThread*(tid + 1)) -
+        qTailPrefixSum - 1;
+
+      for (int t = tBegin; t <= min(tEnd, nthreads - 1); ++t) {
+        int b = max(0, iBegin - begin - qTailPrefixSum[t]);
+        int e = min((int)qTail[t*16], iEnd - begin - qTailPrefixSum[t]);
+
+        memcpy(
+          &reversePerm[0] + begin + qTailPrefixSum[t] + b,
+          q[t] + b,
+          (e - b)*sizeof(int));
+      }
+    }
+
+    if (0 == tid) {
+      levIndices.push_back(end);
+    }
+
+    if (currIterSerial) {
+      if (!prevIterSerial) {
+        bar->wait(tid);
+      }
+
+      if (0 == tid) {
+        tTemp = __rdtsc();
+
+        int *tailPtr = &reversePerm[end];
+        int *rowPtr = rowPtrs[tid];
+        *rowPtr = 0;
+
+        for (int i = begin; i < end; ++i) {
+          int pred = reversePerm[i];
+          int jBegin = diagptr[pred] + 1;
+          int jEnd = extptr[pred];
+          for (int j = jBegin; j < jEnd; ++j) {
+            int succ = colidx[j] - BASE;
+            if (succ >= m) continue; // for a "fat" matrices with halo
+            --nparents[succ];
+            assert(nparents[succ] >= 0);
+            if (nparents[succ] == 0) {
+              *tailPtr = succ;
+              *(rowPtr + 1) = *rowPtr + extptr[succ] - diagptr[succ] - 1;
+
+              ++tailPtr;
+              ++rowPtr;
+            }
+          }
+        } // for each ready row
+
+        qTail[0] = tailPtr - &reversePerm[end];
+        nnzPrefixSum[1] = *rowPtr;
+
+        tt6 += __rdtsc() - tTemp;
+      }
+      else {
+        assert(!prevIterSerial);
+        bar->wait(tid); // waiting for the master thread
+        if (qTail[0] == 0) break;
+      }
+    }
+    else {
+      int nnzPerThread = (nnzPrefixSum[nthreads] + nthreads - 1)/nthreads;
+      int tBegin = upper_bound(
+          nnzPrefixSum, nnzPrefixSum + nthreads + 1,
+          nnzPerThread*tid) -
+        nnzPrefixSum - 1;
+      int tEnd = upper_bound(
+          nnzPrefixSum, nnzPrefixSum + nthreads + 1,
+          nnzPerThread*(tid + 1)) -
+        nnzPrefixSum - 1;
+
+      int iBegin, iEnd;
+      if (0 == tid) {
+        iBegin = 0;
+      }
+      else if (tBegin == nthreads) {
+        iBegin = qTailPrefixSum[nthreads];
+      }
+      else {
+        iBegin = upper_bound(
+            rowPtrs[tBegin], rowPtrs[tBegin] + qTail[tBegin*16],
+            nnzPerThread*tid - nnzPrefixSum[tBegin]) -
+          rowPtrs[tBegin] - 1 +
+          qTailPrefixSum[tBegin];
+      }
+
+      if (tEnd == nthreads) {
+        iEnd = qTailPrefixSum[nthreads];
+      }
+      else {
+        iEnd = upper_bound(
+            rowPtrs[tEnd], rowPtrs[tEnd] + qTail[tEnd*16],
+            nnzPerThread*(tid + 1) - nnzPrefixSum[tEnd]) -
+          rowPtrs[tEnd] - 1 +
+          qTailPrefixSum[tEnd];
+      }
+
+      iBegin += begin;
+      iEnd += begin;
+
+      if (0 == tid) tt4 += __rdtsc() - tTemp;
+
+      tTemp = __rdtsc();
+      bar->wait(tid);
+      if (0 == tid) tt5 += __rdtsc() - tTemp;
+
+      tTemp = __rdtsc();
+      int *tailPtr = q[tid];
+      int *rowPtr = rowPtrs[tid];
+      *rowPtr = 0;
+
+      for (int i = iBegin; i < iEnd; ++i) {
+        int pred = reversePerm[i];
+        int jBegin = diagptr[pred] + 1;
+        int jEnd = extptr[pred];
+        for (int j = jBegin; j < jEnd; ++j) {
+          int succ = colidx[j] - BASE;
+          if (succ >= m) continue; // for a "fat" matrices with halo
+          if (__sync_fetch_and_add(nparents + succ, -1) == 1) {
+            *tailPtr = succ;
+            *(rowPtr + 1) =
+              *rowPtr + extptr[succ] - diagptr[succ] - 1;
+
+            ++tailPtr;
+            ++rowPtr;
+          }
+          assert(nparents[succ] >= 0);
+        }
+      } // for each ready row
+
+      qTail[tid*16] = tailPtr - q[tid];
+      nnzPrefixSum[tid + 1] = *rowPtr;
+      if (0 == tid) tt6 += __rdtsc() - tTemp;
+    }
+
+    prevIterSerial = currIterSerial;
+  } // while true
+  } // omp parallel
+
+#ifndef NDEBUG
+  for (int i = 0; i < m; ++i) {
+    assert(0 == nparents[i]);
+  }
+#endif
+  assert(isPerm(reversePerm, m));
+}
+
+// This routine doesn't depend on that colidx of each row is fully sorted.
+// It only needs to be partially sorted that those smaller than its row index
+// appear before diagptr, those larger than # of rows appear after extptr,
+// and all others appear in between.
+template<int BASE = 0>
+static
+void findLevels_(
+  LevelSchedule *schedule,
+  int m, const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
   const CostFunction& costFunction)
 {
-  findLevels(m, rowptr, diagptr, extptr, colidx, costFunction);
+  vector<int>& levIndices = schedule->levIndices;
+  vector<int>& taskBoundaries = schedule->taskBoundaries;
+  vector<int>& threadBoundaries = schedule->threadBoundaries;
 
+  bool useBarrier = schedule->useBarrier;
+  bool aggregateForVectorization = schedule->aggregateForVectorization;
+
+  bool useMemoryPool = schedule->useMemoryPool;
+
+#ifndef NDEBUG
+  CSR A(m, m, (int *)rowptr, (int *)colidx, (double *)NULL);
+  A.extptr = (int *)extptr;
+  assert(A.isSymmetric(false, true));
+  A.extptr = NULL;
+  A.~CSR();
+#endif
+
+  // extptr points to the beginning of non-local columns (when MPI is used).
+  // When MPI is not used, exptr will be set to NULL and we use rowptr + 1 as
+  // extptr.
   if (NULL == extptr) {
     extptr = rowptr + 1;
   }
 
-  int nnz = rowptr[m];
+  // check columns are partially sorted that lower triangular parts appear before
+  // diagptr and upper triangular parts appear after diagptr
+#ifndef NDEBUG
+  for (int i = 0; i < m; ++i) {
+    for (int j = rowptr[i] - BASE; j < diagptr[i] - BASE; ++j) {
+      assert(colidx[j] - BASE < i);
+    }
+    for (int j = diagptr[i] - BASE; j < extptr[i] - BASE; ++j) {
+      assert(colidx[j] - BASE >= i);
+    }
+    for (int j = extptr[i] - BASE; j < rowptr[i] - BASE; ++j) {
+      assert(colidx[j] - BASE >= m);
+    }
+  }
+#endif
+
+  unsigned long long tt0 = 0, tt1 = 0, tt2 = 0, tt3 = 0, tt4 = 0, tt5 = 0, tt6 = 0;
+
+  unsigned long long t = __rdtsc();
+  int n = m;
+  int nthreads = omp_get_max_threads();
+
+  MemoryPool *memoryPool = MemoryPool::getSingleton();
+
+  int nAligned = (n + 15)/16*16;
+#ifndef LEVEL_CONT_LAYOUT
+  int *levContToOrigPerm;
+#endif
+  levContToOrigPerm = schedule->allocate<int>(nAligned + 128);
+
+  size_t bufferBegin = memoryPool->getTail();
+  int *buffer = schedule->allocate<int>(5*max(nthreads, n + nthreads - 1) + NUM_MAX_THREADS*(2 + 16 + 2 + 2)); // max required in case n == 0
+  assert(buffer);
+  int *tempBuffer = buffer + max(nthreads, n + nthreads - 1)*4;
+    // between buffer and tempBuffer, the followings are allocated
+    // q : max(nthreads, n + nthreads - 1)*2
+    // rowPtrs : max(nthreads, n + nthreads - 1)*2
+
+  int *nparents = tempBuffer; tempBuffer += n;
+  int **q = (int **)tempBuffer; tempBuffer += NUM_MAX_THREADS*(sizeof(int *)/sizeof(int));
+  int *qTail = tempBuffer; tempBuffer += NUM_MAX_THREADS*16;
+  int **rowPtrs = (int **)tempBuffer; tempBuffer += NUM_MAX_THREADS*(sizeof(int *)/sizeof(int));
+  int *nnzPrefixSum = tempBuffer; tempBuffer += NUM_MAX_THREADS*2;
+
+  nnzPrefixSum[0] = 0;
+  nnzPrefixSum[nthreads + 1] = 0;
+
+  levIndices.clear();
+  levIndices.push_back(0);
+
+  tt0 = __rdtsc() - t;
+  unsigned long long ttt;
+
+#pragma omp parallel num_threads(nthreads)
+  {
+  int tid = omp_get_thread_num();
+  if (0 == tid) ttt = __rdtsc();
+  unsigned long long tTemp = __rdtsc();
+
+  q[tid] = buffer + max(nthreads, n + nthreads - 1)/nthreads*2*tid;
+  rowPtrs[tid] = buffer + max(nthreads, n + nthreads - 1)*2 + max(nthreads, n + nthreads - 1)/nthreads*2*tid;
+
+  int *tailPtr = q[tid];
+  int *rowPtr = rowPtrs[tid];
+  *rowPtr = 0;
+
+#pragma omp for
+  for (int i = 0; i < n; ++i) {
+    nparents[i] = diagptr[i] - rowptr[i];
+    if (nparents[i] == 0) {
+      *tailPtr = i;
+      *(rowPtr + 1) = *rowPtr + extptr[i] - diagptr[i] - 1;
+
+      ++tailPtr;
+      ++rowPtr;
+    }
+  }
+
+  qTail[tid*16] = tailPtr - q[tid];
+  nnzPrefixSum[tid + 1] = *rowPtr;
+
+  if (0 == tid) tt1 = __rdtsc() - tTemp;
+  } // omp parallel
+
+  assert(q[0]);
+  findLevels_<BASE>(
+    qTail, nnzPrefixSum, nparents, q, rowPtrs,
+    diagptr, extptr, colidx,
+    levContToOrigPerm, levIndices, m,
+    tt2, tt3, tt4, tt5, tt6);
+
+  ttt = __rdtsc() - ttt;
+
+//#define PRINT_TIME_BREAKDOWN
+#ifdef PRINT_TIME_BREAKDOWN
+  printf("t1 = %f\n", (__rdtsc() - t)/get_cpu_freq());
+  printf("ttt = %f\n", ttt/get_cpu_freq());
+  printf("tt0 = %f (init)\n", tt0/get_cpu_freq());
+  printf("tt1 = %f (first level)\n", tt1/get_cpu_freq());
+  printf("tt2 = %f (first barrier)\n", tt2/get_cpu_freq());
+  printf("tt3 = %f (prefix sum)\n", tt3/get_cpu_freq());
+  printf("tt4 = %f (copy)\n", tt4/get_cpu_freq());
+  printf("tt5 = %f (second barrier)\n", tt5/get_cpu_freq());
+  printf("tt6 = %f (traverse)\n", tt6/get_cpu_freq());
+#undef PRINT_TIME_BREAKDOWN
+#endif
+  t = __rdtsc();
+
+  if (useMemoryPool) {
+    memoryPool->setTail(bufferBegin);
+    buffer = NULL;
+  }
+  else {
+    FREE(buffer);
+  }
+
+  //int ippNumThreads = 0;
+  //ippGetNumThreads(&ippNumThreads);
+  //printf("ippGetNumthreads = %d\n", ippNumThreads);
+  //ippSetNumThreads(1);
+
+  int *reversePerm = levContToOrigPerm;
+
+  size_t taskRowsEnd = memoryPool->getHead();
+  pair<int, int> *taskRows =
+    schedule->allocateFront<pair<int, int> >(nthreads*levIndices.size() - 1);
+
+  /*copy(levIndices.begin(), levIndices.end(), ostream_iterator<int>(cout, " "));
+  printf("\n");*/
+
+  size_t bBufferBegin = memoryPool->getTail();
+  int *bBuffer = schedule->allocate<int>(n + nthreads);
+
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
+  for (int l = 0; l < levIndices.size() - 1; ++l) {
+    int levelBegin = levIndices[l], levelEnd = levIndices[l + 1];
+    int *b = &bBuffer[0];
+
+    sort(&reversePerm[levelBegin], &reversePerm[levelEnd]);
+
+    // partition this level.
+    int nnz = 0;
+    for (int i = levelBegin; i < levelEnd; ++i) {
+      b[i] = nnz;
+      nnz += costFunction.getCostOf(reversePerm[i]);
+    }
+    int nnzPerThread = (nnz + nthreads - 1)/nthreads;
+
+    int prevEnd = levelBegin;
+    int r = levelBegin;
+    nnz = 0;
+    int t;
+    for (t = 0; t < nthreads; ++t) {
+      int newr = lower_bound(&b[r], &b[levelEnd], (t + 1)*nnzPerThread) - &b[0];
+      if (aggregateForVectorization) {
+        // make task size a multiple of 8 as much as possible
+        if (0 == t) {
+          r = min(r + (newr - r + 7)/8*8, levelEnd);
+        }
+        else {
+          r = min(r - 1 + (newr - r + 1 + 7)/8*8, levelEnd);
+        }
+      }
+      else {
+        r = newr;
+      }
+      //for ( ; r < levelEnd && nnz < (t + 1)*nnzPerThread; r++) {
+        //nnz += L.rowptr[reversePerm[r] + 1] - L.rowptr[reversePerm[r]];
+      //}
+      //assert(r == r2);
+
+      int begin = prevEnd;
+      int end = min(r, levelEnd);
+      prevEnd = end;
+
+      taskRows[t*(levIndices.size() - 1) + l] = make_pair(begin, end);
+      if (aggregateForVectorization && end >= levelEnd) break;
+
+      //printf("(%d, %d) (%d, %d) (%d, %d)\n", l, t, begin, end, levelBegin, levelEnd);
+      //if (r < levelEnd)
+        //nnz += L.rowptr[reversePerm[r] + 1] - L.rowptr[reversePerm[r]];
+      ++r; // make sure first threads execute some tasks -> improve locality
+    } // for each thread
+
+    if (aggregateForVectorization) {
+      // shift tasks to the last threads so that earlier threads
+      // have tasks whose number of rows is a multiple of 8.
+
+      // we have (t + 1) non-empty tasks in this level
+      // copy [0, t] to [nthreads - 1 - t, nthreads - 1]
+      for (int i = t; i >= 0; --i) {
+        taskRows[(nthreads - 1 - t + i)*(levIndices.size() - 1) + l] =
+          taskRows[i*(levIndices.size() - 1) + l];
+      }
+      // fill [0, nthreads - 1 - t) empty
+      for (int i = 0; i < nthreads - t - 1; ++i) {
+        taskRows[i*(levIndices.size() - 1) + l] = make_pair(levelBegin, levelBegin);
+      }
+    }
+  } // for each level
+
+  if (useMemoryPool) {
+    memoryPool->setTail(bBufferBegin);
+    bBuffer = NULL;
+  }
+  else {
+    FREE(bBuffer);
+  }
+
+  //printf("t2 = %f\n", (__rdtsc() - t)/get_cpu_freq());
+
+  // new permutation so that rows for a thread are contiguous
+  int i = 0;
+  vector<int> rowPartialSum(nthreads + 1);
+  rowPartialSum[0] = 0;
+
+  threadBoundaries.resize(nthreads + 1);
+  threadBoundaries[0] = 0;
+  if (useBarrier) {
+#pragma omp parallel for
+    for (int tid = 0; tid < nthreads; ++tid) {
+      int sum = 0;
+      int cnt = 0;
+      for (int i = 0; i < levIndices.size() - 1; ++i) {
+        int diff = taskRows[tid*(levIndices.size() - 1) + i].second - taskRows[tid*(levIndices.size() - 1) + i].first;
+        sum += diff;
+        ++cnt;
+      }
+      rowPartialSum[tid + 1] = sum;
+      threadBoundaries[tid + 1] = cnt;
+    }
+  }
+  else {
+#pragma omp parallel for
+    for (int tid = 0; tid < nthreads; ++tid) {
+      int sum = 0;
+      int cnt = 0;
+      for (int i = 0; i < levIndices.size() - 1; ++i) {
+        int diff = taskRows[tid*(levIndices.size() - 1) + i].second - taskRows[tid*(levIndices.size() - 1) + i].first;
+        sum += diff;
+        if (diff) ++cnt;
+      }
+      rowPartialSum[tid + 1] = sum;
+      threadBoundaries[tid + 1] = cnt;
+    }
+  }
+
+  for (int tid = 0; tid < nthreads; ++tid) {
+    rowPartialSum[tid + 1] += rowPartialSum[tid];
+    threadBoundaries[tid + 1] += threadBoundaries[tid];
+  }
+
+  FREE(schedule->origToThreadContPerm);
+  FREE(schedule->threadContToOrigPerm);
+  schedule->origToThreadContPerm = schedule->allocate<int>(m + 64);
+  schedule->threadContToOrigPerm = schedule->allocate<int>(m + 64);
+  int *origToThreadContPerm = schedule->origToThreadContPerm;
+  int *threadContToOrigPerm = schedule->threadContToOrigPerm;
+
+  taskBoundaries.resize(threadBoundaries[nthreads] + 1);
+
+  if (useBarrier) {
+#pragma omp parallel for
+    for (int tid = 0; tid < nthreads; ++tid) {
+      int rowOffset = rowPartialSum[tid];
+      int taskOffset = threadBoundaries[tid];
+      for (int i = 0; i < levIndices.size() - 1; ++i) {
+        taskBoundaries[taskOffset] = rowOffset;
+        ++taskOffset;
+
+        for (int j = taskRows[tid*(levIndices.size() - 1) + i].first; j < taskRows[tid*(levIndices.size() - 1) + i].second; ++j) {
+          origToThreadContPerm[reversePerm[j]] = rowOffset;
+          threadContToOrigPerm[rowOffset] = reversePerm[j];
+          rowOffset++;
+        }
+      } // for each task
+    } // for each thread
+  } // useBarrier
+  else {
+#pragma omp parallel for
+    for (int tid = 0; tid < nthreads; ++tid) {
+      int rowOffset = rowPartialSum[tid];
+      int taskOffset = threadBoundaries[tid];
+      for (int i = 0; i < levIndices.size() - 1; ++i) {
+        if (taskRows[tid*(levIndices.size() - 1) + i].second > taskRows[tid*(levIndices.size() - 1) + i].first) {
+          taskBoundaries[taskOffset] = rowOffset;
+          ++taskOffset;
+
+          for (int j = taskRows[tid*(levIndices.size() - 1) + i].first; j < taskRows[tid*(levIndices.size() - 1) + i].second; ++j) {
+            origToThreadContPerm[reversePerm[j]] = rowOffset;
+            assert(reversePerm[j] >= 0);
+            threadContToOrigPerm[rowOffset] = reversePerm[j];
+            rowOffset++;
+          }
+        }
+      } // for each task
+    } // for each thread
+  } // !useBarrier
+  taskBoundaries[threadBoundaries[nthreads]] = m;
+
+  assert(isPerm(origToThreadContPerm, m));
+  assert(isPerm(threadContToOrigPerm, m));
+
+  if (!useMemoryPool) {
+    FREE(taskRows);
+  }
+  else {
+    memoryPool->setHead(taskRowsEnd);
+    taskRows = NULL;
+  }
+
+#ifdef LEVEL_CONT_LAYOUT
+  origToLevContPerm= MALLOC(int, n);
+  threadContToLevContPerm = MALLOC(int, n);
+  getInversePerm(origToLevContPerm, levContToOrigPerm, n);
+
+#pragma omp parallel for
+  for (int i = 0; i < n; ++i) {
+    threadContToLevContPerm[i] =
+      origToLevContPerm[threadContToOrigPerm[i]];
+  }
+#else
+  if (!useMemoryPool) {
+    FREE(levContToOrigPerm);
+  }
+#endif
+
+  schedule->ntasks = threadBoundaries.back();
+}
+
+template<int BASE = 0>
+static
+void constructTaskGraph_(
+  LevelSchedule *schedule,
+  int m,
+  const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
+  const CostFunction& costFunction)
+{
+  vector<int>& levIndices = schedule->levIndices;
+  vector<int>& taskBoundaries = schedule->taskBoundaries;
+  vector<int>& threadBoundaries = schedule->threadBoundaries;
+
+  int **parentsBuf = schedule->parentsBuf;
+
+  bool transitiveReduction = schedule->transitiveReduction;
+  bool fuseSpMV = schedule->fuseSpMV;
+
+  bool useMemoryPool = schedule->useMemoryPool;
+
+  findLevels_<BASE>(schedule, m, rowptr, diagptr, extptr, colidx, costFunction);
+
+  int ntasks = schedule->ntasks;
+  int *threadContToOrigPerm = schedule->threadContToOrigPerm;
+
+  if (NULL == extptr) {
+    extptr = rowptr + 1;
+  }
+  colidx -= BASE;
+
+  int nnz = rowptr[m] - BASE;
 
   unsigned long long t;
 #ifdef _OPENMP
@@ -200,7 +836,7 @@ void LevelSchedule::constructTaskGraph(
 
   MemoryPool *memoryPool = MemoryPool::getSingleton();
   size_t origRowIdToTaskIdEnd = memoryPool->getHead();
-  int *origRowIdToTaskId = allocateFront<int>(m);
+  int *origRowIdToTaskId = schedule->allocateFront<int>(m);
 #pragma omp parallel for num_threads(nthreads)
   for (int task = 0; task < ntasks; ++task) {
     for (int row = taskBoundaries[task]; row < taskBoundaries[task + 1]; ++row) {
@@ -211,13 +847,18 @@ void LevelSchedule::constructTaskGraph(
   int isBackwardBegin = 0;
   int isBackwardEnd = 1;
 
-  nparentsForward = allocate<short>(ntasks);
-  parentsForward = allocate<int *>(ntasks);
+  schedule->nparentsForward = schedule->allocate<short>(ntasks);
+  schedule->parentsForward = schedule->allocate<int *>(ntasks);
+  short *nparentsForward = schedule->nparentsForward;
+  int **parentsForward = schedule->parentsForward;
 
-  nparentsBackward = allocate<short>(ntasks);
-  parentsBackward = allocate<int *>(ntasks);
+  schedule->nparentsBackward = schedule->allocate<short>(ntasks);
+  schedule->parentsBackward = schedule->allocate<int *>(ntasks);
+  short *nparentsBackward = schedule->nparentsBackward;
+  int **parentsBackward = schedule->parentsBackward;
 
-  taskFinished = allocate<int>(ntasks);
+  schedule->taskFinished = schedule->allocate<int>(ntasks);
+  volatile int *taskFinished = schedule->taskFinished;
 
 #pragma omp parallel for
   for (int i = 0; i < ntasks; ++i) {
@@ -245,12 +886,12 @@ void LevelSchedule::constructTaskGraph(
 
   size_t adjacencyBegin = memoryPool->getTail();
   CSR taskAdjacency, taskInvAdjacency;
-  taskAdjacency.rowptr = allocate<int>(ntasks + 1);
-  taskAdjacency.colidx = allocate<int>((nnz - m)/2 + m);
-  taskInvAdjacency.rowptr = allocate<int>(ntasks + 1);
-  taskInvAdjacency.colidx = allocate<int>((nnz - m)/2 + m + ntasks);
+  taskAdjacency.rowptr = schedule->allocate<int>(ntasks + 1);
+  taskAdjacency.colidx = schedule->allocate<int>((nnz - m)/2 + m);
+  taskInvAdjacency.rowptr = schedule->allocate<int>(ntasks + 1);
+  taskInvAdjacency.colidx = schedule->allocate<int>((nnz - m)/2 + m + ntasks);
 
-  int *taskInvAdjacencyLengths = allocate<int>(ntasks);
+  int *taskInvAdjacencyLengths = schedule->allocate<int>(ntasks);
 #pragma omp parallel for num_threads(nthreads)
   for (int i = 0; i < ntasks; ++i) {
     taskInvAdjacencyLengths[i] = 0;
@@ -396,7 +1037,7 @@ void LevelSchedule::constructTaskGraph(
         int begin = diagptr[i1] + 1;
         int end = extptr[i1];
         for (int j = begin; j < end; ++j) {
-          int v = origRowIdToTaskId[colidx[j]];
+          int v = origRowIdToTaskId[colidx[j] - BASE];
           if (v < boundaryBegin || v >= boundaryEnd) {
             i2s[size] = v;
             ++size;
@@ -488,7 +1129,7 @@ void LevelSchedule::constructTaskGraph(
 #pragma omp barrier
 #pragma omp single // FIXME - parallelize this
     {
-      fusedSchedule = new FusedGSAndSpMVSchedule(this);
+      schedule->fusedSchedule = new FusedGSAndSpMVSchedule(schedule);
 
       tempParents.resize(ntasks);
       for (int task = 0; task < ntasks; ++task) {
@@ -523,7 +1164,7 @@ void LevelSchedule::constructTaskGraph(
           int row = threadContToOrigPerm[i];
           int begin = rowptr[row], end = diagptr[row];
           for (int j = begin; j < end; ++j) {
-            int parentTask = origRowIdToTaskId[colidx[j]];
+            int parentTask = origRowIdToTaskId[colidx[j] - BASE];
             if (parentTask >= threadBoundaries[t] && parentTask < threadBoundaries[t + 1]) {
               if (parentTask < minParentTask) {
                 minParentTask = parentTask;
@@ -609,6 +1250,7 @@ void LevelSchedule::constructTaskGraph(
 
 #pragma omp single
     {
+      FusedGSAndSpMVSchedule *fusedSchedule = schedule->fusedSchedule;
       fusedSchedule->parents = MALLOC(int *, ntasks);
       fusedSchedule->parentsBuf = MALLOC(int, perThreadOrigRowPtrSum[nthreads] + 2*ntasks);
 
@@ -808,9 +1450,9 @@ void LevelSchedule::constructTaskGraph(
     {
       childrenBufEnd = memoryPool->getHead();
 
-      childrenBuf = allocateFront<int>(perThreadRowPtrSum[nthreads]);
-      children = allocateFront<int *>(ntasks);
-      numOfChildren = allocateFront<short>(ntasks);
+      childrenBuf = schedule->allocateFront<int>(perThreadRowPtrSum[nthreads]);
+      children = schedule->allocateFront<int *>(ntasks);
+      numOfChildren = schedule->allocateFront<short>(ntasks);
     }
 
 #ifdef _OPENMP
@@ -950,8 +1592,8 @@ void LevelSchedule::constructTaskGraph(
         nparentsBackward[i] = numOfChildren[i];
       }
 
-      parentsBuf[0] = allocate<int>(cForward);
-      parentsBuf[1] = allocate<int>(cBackward);
+      parentsBuf[0] = schedule->allocate<int>(cForward);
+      parentsBuf[1] = schedule->allocate<int>(cBackward);
 
       cForward = 0, cBackward = 0;
       for (int i = 0; i < ntasks; ++i) {
@@ -963,7 +1605,7 @@ void LevelSchedule::constructTaskGraph(
       }
 
       nparentsTempBegin = memoryPool->getTail();
-      nparentsTemp = allocate<short>(ntasks);
+      nparentsTemp = schedule->allocate<short>(ntasks);
     } // omp single
 #ifdef _OPENMP
 #pragma omp barrier
@@ -1024,8 +1666,8 @@ void LevelSchedule::constructTaskGraph(
       }
       FREE(taskInvAdjacencyLengths);
 
-      parentsBuf[0] = allocate<int>(cForward);
-      parentsBuf[1] = allocate<int>(cBackward);
+      parentsBuf[0] = schedule->allocate<int>(cForward);
+      parentsBuf[1] = schedule->allocate<int>(cBackward);
 
 #ifdef LOG_MEMORY_ALLOCATION
       printf("Allocate %d MB in %s\n", sizeof(int)*cForward/1024/1024, __func__);
@@ -1105,603 +1747,18 @@ void LevelSchedule::constructTaskGraph(
 #endif
 }
 
-void findLevels_(
-  int *qTail, int *nnzPrefixSum, int *nparents, int **q, int **rowPtrs,
-  const int *rowptr, const int *diagptr, const int *extptr,
-  const int *colidx,
-  int *reversePerm, vector<int>& levIndices,
+void LevelSchedule::constructTaskGraph(
   int m,
-  unsigned long long &tt2, unsigned long long &tt3, unsigned long long &tt4, unsigned long long &tt5, unsigned long long &tt6)
-{
-  int qTailPrefixSum[NUM_MAX_THREADS] = { 0 };
-  volatile int endSynchronized[1] = { 0 };
-
-#ifdef LOADIMBA
-  synk::LoadImba *bar = synk::LoadImba::getInstance();
-#else
-  synk::Barrier *bar = synk::Barrier::getInstance();
-#endif
-
-#pragma omp parallel
-  {
-  int tid = omp_get_thread_num();
-  int nthreads = omp_get_num_threads();
-
-  bool prevIterSerial = false;
-  unsigned long long tTemp = __rdtsc();
-
-  int end = 0;
-
-  while (true) { // until all nodes are visited
-    bool currIterSerial = false;
-    int begin = end;
-
-    if (prevIterSerial) {
-      if (0 == tid) {
-        if (qTail[0] == 0) {
-          bar->wait(tid); // wake up other threads
-          break;
-        }
-#define THRESH 64
-        currIterSerial = qTail[0] < THRESH*2;
-        if (!currIterSerial) {
-          *endSynchronized = begin;
-          bar->wait(tid); // wake up other threads
-          end = begin + qTail[0];
-
-          qTailPrefixSum[1] = qTail[0];
-          bar->wait(tid);
-        }
-        else {
-          end = begin + qTail[0];
-        }
-      }
-      else {
-        currIterSerial = false;
-
-        begin = *endSynchronized;
-        end = begin + qTail[0];
-        qTailPrefixSum[tid + 1] = qTail[0];
-        nnzPrefixSum[tid + 1] = nnzPrefixSum[1];
-        bar->wait(tid);
-      }
-    }
-    else {
-      tTemp = __rdtsc();
-      bar->wait(tid);
-      if (0 == tid) tt2 += __rdtsc() - tTemp;
-
-      tTemp = __rdtsc();
-
-      // compute prefix sum of # of discovered nodes and nnzs associated with them
-#pragma omp single
-      {
-        for (int t = 0; t < nthreads; ++t) {
-          qTailPrefixSum[t + 1] = qTailPrefixSum[t] + qTail[t*16];
-          nnzPrefixSum[t + 1] += nnzPrefixSum[t];
-        }
-      }
-
-      if (0 == tid) tt3 += __rdtsc() - tTemp;
-
-      if (qTailPrefixSum[nthreads] == 0) break;
-      currIterSerial = qTailPrefixSum[nthreads] < THRESH;
-
-      tTemp = __rdtsc();
-
-      int begin = end;
-      end = begin + qTailPrefixSum[nthreads];
-
-      int iPerThread = (qTailPrefixSum[nthreads] + nthreads - 1)/nthreads;
-      int iBegin = min(begin + iPerThread*tid, end);
-      int iEnd = min(iBegin + iPerThread, end);
-
-      int tBegin = upper_bound(
-          qTailPrefixSum, qTailPrefixSum + nthreads + 1,
-          iPerThread*tid) -
-        qTailPrefixSum - 1;
-      int tEnd = upper_bound(
-          qTailPrefixSum, qTailPrefixSum + nthreads + 1,
-          iPerThread*(tid + 1)) -
-        qTailPrefixSum - 1;
-
-      for (int t = tBegin; t <= min(tEnd, nthreads - 1); ++t) {
-        int b = max(0, iBegin - begin - qTailPrefixSum[t]);
-        int e = min((int)qTail[t*16], iEnd - begin - qTailPrefixSum[t]);
-
-        memcpy(
-          &reversePerm[0] + begin + qTailPrefixSum[t] + b,
-          q[t] + b,
-          (e - b)*sizeof(int));
-      }
-    }
-
-    if (0 == tid) {
-      levIndices.push_back(end);
-    }
-
-    if (currIterSerial) {
-      if (!prevIterSerial) {
-        bar->wait(tid);
-      }
-
-      if (0 == tid) {
-        tTemp = __rdtsc();
-
-        int *tailPtr = &reversePerm[end];
-        int *rowPtr = rowPtrs[tid];
-        *rowPtr = 0;
-
-        for (int i = begin; i < end; ++i) {
-          int pred = reversePerm[i];
-          int jBegin = diagptr[pred] + 1;
-          int jEnd = extptr[pred];
-          for (int j = jBegin; j < jEnd; ++j) {
-            int succ = colidx[j];
-            if (succ >= m) continue; // for a "fat" matrices with halo
-            --nparents[succ];
-            assert(nparents[succ] >= 0);
-            if (nparents[succ] == 0) {
-              *tailPtr = succ;
-              *(rowPtr + 1) = *rowPtr + extptr[succ] - diagptr[succ] - 1;
-
-              ++tailPtr;
-              ++rowPtr;
-            }
-          }
-        } // for each ready row
-
-        qTail[0] = tailPtr - &reversePerm[end];
-        nnzPrefixSum[1] = *rowPtr;
-
-        tt6 += __rdtsc() - tTemp;
-      }
-      else {
-        assert(!prevIterSerial);
-        bar->wait(tid); // waiting for the master thread
-        if (qTail[0] == 0) break;
-      }
-    }
-    else {
-      int nnzPerThread = (nnzPrefixSum[nthreads] + nthreads - 1)/nthreads;
-      int tBegin = upper_bound(
-          nnzPrefixSum, nnzPrefixSum + nthreads + 1,
-          nnzPerThread*tid) -
-        nnzPrefixSum - 1;
-      int tEnd = upper_bound(
-          nnzPrefixSum, nnzPrefixSum + nthreads + 1,
-          nnzPerThread*(tid + 1)) -
-        nnzPrefixSum - 1;
-
-      int iBegin, iEnd;
-      if (0 == tid) {
-        iBegin = 0;
-      }
-      else if (tBegin == nthreads) {
-        iBegin = qTailPrefixSum[nthreads];
-      }
-      else {
-        iBegin = upper_bound(
-            rowPtrs[tBegin], rowPtrs[tBegin] + qTail[tBegin*16],
-            nnzPerThread*tid - nnzPrefixSum[tBegin]) -
-          rowPtrs[tBegin] - 1 +
-          qTailPrefixSum[tBegin];
-      }
-
-      if (tEnd == nthreads) {
-        iEnd = qTailPrefixSum[nthreads];
-      }
-      else {
-        iEnd = upper_bound(
-            rowPtrs[tEnd], rowPtrs[tEnd] + qTail[tEnd*16],
-            nnzPerThread*(tid + 1) - nnzPrefixSum[tEnd]) -
-          rowPtrs[tEnd] - 1 +
-          qTailPrefixSum[tEnd];
-      }
-
-      //printf("[%d] %s:%d %d~%d %d~%d\n", tid, __FILE__, __LINE__, tBegin, tEnd, iBegin, iEnd);
-
-      iBegin += begin;
-      iEnd += begin;
-
-      if (0 == tid) tt4 += __rdtsc() - tTemp;
-
-      tTemp = __rdtsc();
-      bar->wait(tid);
-      if (0 == tid) tt5 += __rdtsc() - tTemp;
-
-      tTemp = __rdtsc();
-      int *tailPtr = q[tid];
-      int *rowPtr = rowPtrs[tid];
-      *rowPtr = 0;
-
-      for (int i = iBegin; i < iEnd; ++i) {
-        int pred = reversePerm[i];
-        int jBegin = diagptr[pred] + 1;
-        int jEnd = extptr[pred];
-        for (int j = jBegin; j < jEnd; ++j) {
-          int succ = colidx[j];
-          if (succ >= m) continue; // for a "fat" matrices with halo
-          if (__sync_fetch_and_add(nparents + succ, -1) == 1) {
-            *tailPtr = succ;
-            *(rowPtr + 1) =
-              *rowPtr + extptr[succ] - diagptr[succ] - 1;
-
-            ++tailPtr;
-            ++rowPtr;
-          }
-          assert(nparents[succ] >= 0);
-        }
-      } // for each ready row
-
-      qTail[tid*16] = tailPtr - q[tid];
-      nnzPrefixSum[tid + 1] = *rowPtr;
-      if (0 == tid) tt6 += __rdtsc() - tTemp;
-    }
-
-    prevIterSerial = currIterSerial;
-  } // while true
-  } // omp parallel
-
-#ifndef NDEBUG
-  for (int i = 0; i < m; ++i) {
-    assert(0 == nparents[i]);
-  }
-#endif
-  assert(isPerm(reversePerm, m));
-}
-
-// This routine doesn't depend on that colidx of each row is fully sorted.
-// It only needs to be partially sorted that those smaller than its row index
-// appear before diagptr, those larger than # of rows appear after extptr,
-// and all others appear in between.
-void LevelSchedule::findLevels(
-  int m, const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
+  const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
   const CostFunction& costFunction)
 {
-#ifndef NDEBUG
-  CSR A(m, m, (int *)rowptr, (int *)colidx, (double *)NULL);
-  A.extptr = (int *)extptr;
-  assert(A.isSymmetric(false));
-  A.extptr = NULL;
-  A.~CSR();
-#endif
-
-  // extptr points to the beginning of non-local columns (when MPI is used).
-  // When MPI is not used, exptr will be set to NULL and we use rowptr + 1 as
-  // extptr.
-  if (NULL == extptr) {
-    extptr = rowptr + 1;
-  }
-
-  // check columns are partially sorted that lower triangular parts appear before
-  // diagptr and upper triangular parts appear after diagptr
-#ifndef NDEBUG
-  for (int i = 0; i < m; ++i) {
-    for (int j = rowptr[i]; j < diagptr[i]; ++j) {
-      assert(colidx[j] < i);
-    }
-    for (int j = diagptr[i]; j < extptr[i]; ++j) {
-      assert(colidx[j] >= i);
-    }
-    for (int j = extptr[i]; j < rowptr[i]; ++j) {
-      assert(colidx[j] >= m);
-    }
-  }
-#endif
-
-  unsigned long long tt0 = 0, tt1 = 0, tt2 = 0, tt3 = 0, tt4 = 0, tt5 = 0, tt6 = 0;
-
-  unsigned long long t = __rdtsc();
-  int n = m;
-  int nthreads = omp_get_max_threads();
-
-  MemoryPool *memoryPool = MemoryPool::getSingleton();
-
-  int nAligned = (n + 15)/16*16;
-#ifndef LEVEL_CONT_LAYOUT
-  int *levContToOrigPerm;
-#endif
-  levContToOrigPerm = allocate<int>(nAligned + 128);
-
-  size_t bufferBegin = memoryPool->getTail();
-  int *buffer = allocate<int>(5*max(nthreads, n + nthreads - 1) + NUM_MAX_THREADS*(2 + 16 + 2 + 2)); // max required in case n == 0
-  assert(buffer);
-  int *tempBuffer = buffer + max(nthreads, n + nthreads - 1)*4;
-    // between buffer and tempBuffer, the followings are allocated
-    // q : max(nthreads, n + nthreads - 1)*2
-    // rowPtrs : max(nthreads, n + nthreads - 1)*2
-
-  int *nparents = tempBuffer; tempBuffer += n;
-  int **q = (int **)tempBuffer; tempBuffer += NUM_MAX_THREADS*(sizeof(int *)/sizeof(int));
-  int *qTail = tempBuffer; tempBuffer += NUM_MAX_THREADS*16;
-  int **rowPtrs = (int **)tempBuffer; tempBuffer += NUM_MAX_THREADS*(sizeof(int *)/sizeof(int));
-  int *nnzPrefixSum = tempBuffer; tempBuffer += NUM_MAX_THREADS*2;
-
-  nnzPrefixSum[0] = 0;
-  nnzPrefixSum[nthreads + 1] = 0;
-
-  levIndices.clear();
-  levIndices.push_back(0);
-
-  tt0 = __rdtsc() - t;
-  unsigned long long ttt;
-
-#pragma omp parallel num_threads(nthreads)
-  {
-  int tid = omp_get_thread_num();
-  if (0 == tid) ttt = __rdtsc();
-  unsigned long long tTemp = __rdtsc();
-
-  q[tid] = buffer + max(nthreads, n + nthreads - 1)/nthreads*2*tid;
-  rowPtrs[tid] = buffer + max(nthreads, n + nthreads - 1)*2 + max(nthreads, n + nthreads - 1)/nthreads*2*tid;
-
-  int *tailPtr = q[tid];
-  int *rowPtr = rowPtrs[tid];
-  *rowPtr = 0;
-
-#pragma omp for
-  for (int i = 0; i < n; ++i) {
-    nparents[i] = diagptr[i] - rowptr[i];
-    if (nparents[i] == 0) {
-      *tailPtr = i;
-      *(rowPtr + 1) = *rowPtr + extptr[i] - diagptr[i] - 1;
-
-      ++tailPtr;
-      ++rowPtr;
-    }
-  }
-
-  qTail[tid*16] = tailPtr - q[tid];
-  nnzPrefixSum[tid + 1] = *rowPtr;
-
-  if (0 == tid) tt1 = __rdtsc() - tTemp;
-  } // omp parallel
-
-  assert(q[0]);
-  findLevels_(
-    qTail, nnzPrefixSum, nparents, q, rowPtrs,
-    rowptr, diagptr, extptr, colidx,
-    levContToOrigPerm, levIndices, m,
-    tt2, tt3, tt4, tt5, tt6);
-
-  ttt = __rdtsc() - ttt;
-
-//#define PRINT_TIME_BREAKDOWN
-#ifdef PRINT_TIME_BREAKDOWN
-  printf("t1 = %f\n", (__rdtsc() - t)/get_cpu_freq());
-  printf("ttt = %f\n", ttt/get_cpu_freq());
-  printf("tt0 = %f (init)\n", tt0/get_cpu_freq());
-  printf("tt1 = %f (first level)\n", tt1/get_cpu_freq());
-  printf("tt2 = %f (first barrier)\n", tt2/get_cpu_freq());
-  printf("tt3 = %f (prefix sum)\n", tt3/get_cpu_freq());
-  printf("tt4 = %f (copy)\n", tt4/get_cpu_freq());
-  printf("tt5 = %f (second barrier)\n", tt5/get_cpu_freq());
-  printf("tt6 = %f (traverse)\n", tt6/get_cpu_freq());
-#undef PRINT_TIME_BREAKDOWN
-#endif
-  t = __rdtsc();
-
-  if (useMemoryPool) {
-    memoryPool->setTail(bufferBegin);
-    buffer = NULL;
+  if (0 == rowptr[0]) {
+    return constructTaskGraph_<0>(this, m, rowptr, diagptr, extptr, colidx, costFunction);
   }
   else {
-    FREE(buffer);
+    assert(1 == rowptr[0]);
+    return constructTaskGraph_<1>(this, m, rowptr, diagptr, extptr, colidx, costFunction);
   }
-
-  //int ippNumThreads = 0;
-  //ippGetNumThreads(&ippNumThreads);
-  //printf("ippGetNumthreads = %d\n", ippNumThreads);
-  //ippSetNumThreads(1);
-
-  int *reversePerm = levContToOrigPerm;
-
-  size_t taskRowsEnd = memoryPool->getHead();
-  pair<int, int> *taskRows =
-    allocateFront<pair<int, int> >(nthreads*levIndices.size() - 1);
-
-  /*copy(levIndices.begin(), levIndices.end(), ostream_iterator<int>(cout, " "));
-  printf("\n");*/
-
-  size_t bBufferBegin = memoryPool->getTail();
-  int *bBuffer = allocate<int>(n + nthreads);
-
-#ifdef _OPENMP
-#pragma omp parallel for
-#endif
-  for (int l = 0; l < levIndices.size() - 1; ++l) {
-    int levelBegin = levIndices[l], levelEnd = levIndices[l + 1];
-    int *b = &bBuffer[0];
-
-    sort(&reversePerm[levelBegin], &reversePerm[levelEnd]);
-
-    // partition this level.
-    int nnz = 0;
-    for (int i = levelBegin; i < levelEnd; ++i) {
-      b[i] = nnz;
-      nnz += costFunction.getCostOf(reversePerm[i]);
-    }
-    int nnzPerThread = (nnz + nthreads - 1)/nthreads;
-
-    int prevEnd = levelBegin;
-    int r = levelBegin;
-    nnz = 0;
-    int t;
-    for (t = 0; t < nthreads; ++t) {
-      int newr = lower_bound(&b[r], &b[levelEnd], (t + 1)*nnzPerThread) - &b[0];
-      if (aggregateForVectorization) {
-        // make task size a multiple of 8 as much as possible
-        if (0 == t) {
-          r = min(r + (newr - r + 7)/8*8, levelEnd);
-        }
-        else {
-          r = min(r - 1 + (newr - r + 1 + 7)/8*8, levelEnd);
-        }
-      }
-      else {
-        r = newr;
-      }
-      //for ( ; r < levelEnd && nnz < (t + 1)*nnzPerThread; r++) {
-        //nnz += L.rowptr[reversePerm[r] + 1] - L.rowptr[reversePerm[r]];
-      //}
-      //assert(r == r2);
-
-      int begin = prevEnd;
-      int end = min(r, levelEnd);
-      prevEnd = end;
-
-      taskRows[t*(levIndices.size() - 1) + l] = make_pair(begin, end);
-      if (aggregateForVectorization && end >= levelEnd) break;
-
-      //printf("(%d, %d) (%d, %d) (%d, %d)\n", l, t, begin, end, levelBegin, levelEnd);
-      //if (r < levelEnd)
-        //nnz += L.rowptr[reversePerm[r] + 1] - L.rowptr[reversePerm[r]];
-      ++r; // make sure first threads execute some tasks -> improve locality
-    } // for each thread
-
-    if (aggregateForVectorization) {
-      // shift tasks to the last threads so that earlier threads
-      // have tasks whose number of rows is a multiple of 8.
-
-      // we have (t + 1) non-empty tasks in this level
-      // copy [0, t] to [nthreads - 1 - t, nthreads - 1]
-      for (int i = t; i >= 0; --i) {
-        taskRows[(nthreads - 1 - t + i)*(levIndices.size() - 1) + l] =
-          taskRows[i*(levIndices.size() - 1) + l];
-      }
-      // fill [0, nthreads - 1 - t) empty
-      for (int i = 0; i < nthreads - t - 1; ++i) {
-        taskRows[i*(levIndices.size() - 1) + l] = make_pair(levelBegin, levelBegin);
-      }
-    }
-  } // for each level
-
-  if (useMemoryPool) {
-    memoryPool->setTail(bBufferBegin);
-    bBuffer = NULL;
-  }
-  else {
-    FREE(bBuffer);
-  }
-
-  //printf("t2 = %f\n", (__rdtsc() - t)/get_cpu_freq());
-
-  // new permutation so that rows for a thread are contiguous
-  int i = 0;
-  vector<int> rowPartialSum(nthreads + 1);
-  rowPartialSum[0] = 0;
-
-  threadBoundaries.resize(nthreads + 1);
-  threadBoundaries[0] = 0;
-  if (useBarrier) {
-#pragma omp parallel for
-    for (int tid = 0; tid < nthreads; ++tid) {
-      int sum = 0;
-      int cnt = 0;
-      for (int i = 0; i < levIndices.size() - 1; ++i) {
-        int diff = taskRows[tid*(levIndices.size() - 1) + i].second - taskRows[tid*(levIndices.size() - 1) + i].first;
-        sum += diff;
-        ++cnt;
-      }
-      rowPartialSum[tid + 1] = sum;
-      threadBoundaries[tid + 1] = cnt;
-    }
-  }
-  else {
-#pragma omp parallel for
-    for (int tid = 0; tid < nthreads; ++tid) {
-      int sum = 0;
-      int cnt = 0;
-      for (int i = 0; i < levIndices.size() - 1; ++i) {
-        int diff = taskRows[tid*(levIndices.size() - 1) + i].second - taskRows[tid*(levIndices.size() - 1) + i].first;
-        sum += diff;
-        if (diff) ++cnt;
-      }
-      rowPartialSum[tid + 1] = sum;
-      threadBoundaries[tid + 1] = cnt;
-    }
-  }
-
-  for (int tid = 0; tid < nthreads; ++tid) {
-    rowPartialSum[tid + 1] += rowPartialSum[tid];
-    threadBoundaries[tid + 1] += threadBoundaries[tid];
-  }
-
-  FREE(origToThreadContPerm);
-  FREE(threadContToOrigPerm);
-  origToThreadContPerm = allocate<int>(m + 64);
-  threadContToOrigPerm = allocate<int>(m + 64);
-
-  taskBoundaries.resize(threadBoundaries[nthreads] + 1);
-
-  if (useBarrier) {
-#pragma omp parallel for
-    for (int tid = 0; tid < nthreads; ++tid) {
-      int rowOffset = rowPartialSum[tid];
-      int taskOffset = threadBoundaries[tid];
-      for (int i = 0; i < levIndices.size() - 1; ++i) {
-        taskBoundaries[taskOffset] = rowOffset;
-        ++taskOffset;
-
-        for (int j = taskRows[tid*(levIndices.size() - 1) + i].first; j < taskRows[tid*(levIndices.size() - 1) + i].second; ++j) {
-          origToThreadContPerm[reversePerm[j]] = rowOffset;
-          threadContToOrigPerm[rowOffset] = reversePerm[j];
-          rowOffset++;
-        }
-      } // for each task
-    } // for each thread
-  } // useBarrier
-  else {
-#pragma omp parallel for
-    for (int tid = 0; tid < nthreads; ++tid) {
-      int rowOffset = rowPartialSum[tid];
-      int taskOffset = threadBoundaries[tid];
-      for (int i = 0; i < levIndices.size() - 1; ++i) {
-        if (taskRows[tid*(levIndices.size() - 1) + i].second > taskRows[tid*(levIndices.size() - 1) + i].first) {
-          taskBoundaries[taskOffset] = rowOffset;
-          ++taskOffset;
-
-          for (int j = taskRows[tid*(levIndices.size() - 1) + i].first; j < taskRows[tid*(levIndices.size() - 1) + i].second; ++j) {
-            origToThreadContPerm[reversePerm[j]] = rowOffset;
-            assert(reversePerm[j] >= 0);
-            threadContToOrigPerm[rowOffset] = reversePerm[j];
-            rowOffset++;
-          }
-        }
-      } // for each task
-    } // for each thread
-  } // !useBarrier
-  taskBoundaries[threadBoundaries[nthreads]] = m;
-
-  assert(isPerm(origToThreadContPerm, m));
-  assert(isPerm(threadContToOrigPerm, m));
-
-  if (!useMemoryPool) {
-    FREE(taskRows);
-  }
-  else {
-    memoryPool->setHead(taskRowsEnd);
-    taskRows = NULL;
-  }
-
-#ifdef LEVEL_CONT_LAYOUT
-  origToLevContPerm= MALLOC(int, n);
-  threadContToLevContPerm = MALLOC(int, n);
-  getInversePerm(origToLevContPerm, levContToOrigPerm, n);
-
-#pragma omp parallel for
-  for (int i = 0; i < n; ++i) {
-    threadContToLevContPerm[i] =
-      origToLevContPerm[threadContToOrigPerm[i]];
-  }
-#else
-  if (!useMemoryPool) {
-    FREE(levContToOrigPerm);
-  }
-#endif
-
-  ntasks = threadBoundaries.back();
 }
 
 } // namespace SpMP

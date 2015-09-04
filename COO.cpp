@@ -103,7 +103,8 @@ void coo2csr(
   int m, int nnz,
   int *rowptr, int *colidx, T *values,
   const int *cooRowidx, const int *cooColidx, const T *cooValues,
-  bool sort)
+  bool sort,
+  int outBase = 0)
 {
   int i, l;
 
@@ -113,28 +114,26 @@ void coo2csr(
   /* determine row lengths */
   for (i = 0; i < nnz; i++) rowptr[cooRowidx[i]]++;
 
-
   for (i = 0; i < m; i++) rowptr[i+1] += rowptr[i];
-
 
   /* go through the structure  once more. Fill in output matrix. */
   for (l = 0; l < nnz; l++) {
     i = rowptr[cooRowidx[l] - 1];
     values[i] = cooValues[l];
-    colidx[i] = cooColidx[l] - 1;
+    colidx[i] = cooColidx[l] - 1 + outBase;
     rowptr[cooRowidx[l] - 1]++;
   }
 
   /* shift back rowptr */
-  for (i = m; i>0; i--) rowptr[i] = rowptr[i-1];
+  for (i = m; i > 0; i--) rowptr[i] = rowptr[i-1] + outBase;
 
-  rowptr[0] = 0;
+  rowptr[0] = outBase;
 
   if (sort) {
 #pragma omp parallel for
     for (i=0; i < m; i++){
-      qsort(colidx, values, rowptr[i], rowptr[i+1] - 1);
-      assert(is_sorted(colidx + rowptr[i], colidx + rowptr[i+1]));
+      qsort(colidx, values, rowptr[i] - outBase, rowptr[i+1] - 1 - outBase);
+      assert(is_sorted(colidx + rowptr[i] - outBase, colidx + rowptr[i+1] - outBase));
     }
   }
 }
@@ -143,12 +142,13 @@ void dcoo2csr(
   int m, int nnz,
   int *rowptr, int *colidx, double *values,
   const int *cooRowidx, const int *cooColidx, const double *cooValues,
-  bool sort /*=true*/)
+  bool sort /*=true*/,
+  int outBase /*=0*/)
 {
-  coo2csr(m, nnz, rowptr, colidx, values, cooRowidx, cooColidx, cooValues, sort);
+  coo2csr(m, nnz, rowptr, colidx, values, cooRowidx, cooColidx, cooValues, sort, outBase);
 }
 
-void dcoo2csr(CSR *Acrs, const COO *Acoo, bool createSeparateDiagData /*= true*/)
+void dcoo2csr(CSR *Acrs, const COO *Acoo, int outBase /*=0*/, bool createSeparateDiagData /*= true*/)
 {
   Acrs->n=Acoo->n;
   Acrs->m=Acoo->m;
@@ -156,17 +156,19 @@ void dcoo2csr(CSR *Acrs, const COO *Acoo, bool createSeparateDiagData /*= true*/
   dcoo2csr(
     Acrs->m, Acoo->nnz,
     Acrs->rowptr, Acrs->colidx, Acrs->values,
-    Acoo->rowidx, Acoo->colidx, Acoo->values);
+    Acoo->rowidx, Acoo->colidx, Acoo->values,
+    true /*sort*/, outBase);
 
+  int base = Acrs->getBase();
   if (Acrs->diagptr) {
     if (!Acrs->idiag || !Acrs->diag) {
       createSeparateDiagData = false;
     }
 #pragma omp parallel for
     for (int i = 0; i < Acrs->m; ++i) {
-      for (int j = Acrs->rowptr[i]; j < Acrs->rowptr[i + 1]; ++j) {
-        if (Acrs->colidx[j] == i) {
-          Acrs->diagptr[i] = j;
+      for (int j = Acrs->rowptr[i] - base; j < Acrs->rowptr[i + 1] - base; ++j) {
+        if (Acrs->colidx[j] - base == i) {
+          Acrs->diagptr[i] = j + base;
 
           if (createSeparateDiagData) {
             Acrs->idiag[i] = 1/Acrs->values[j];

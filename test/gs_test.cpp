@@ -86,41 +86,35 @@ bwd_p2p_tr_red_perm        8.52 gflops   51.36 gbps
 
 #include "test.hpp"
 
-typedef enum
-{
-  REFERENCE = 0,
-  BARRIER,
-  P2P,
-  P2P_WITH_TRANSITIVE_REDUCTION,
-} Option;
-
 /**
  * Reference sequential Gauss-Seidel smoother
  */
 template<bool IS_FORWARD>
-void gsRef(const CSR& A, double y[], const double b[])
+void gsRef_(const CSR& A, double y[], const double b[])
 {
+  ADJUST_FOR_BASE;
+
   int iBegin = IS_FORWARD ? 0 : A.m - 1;
   int iEnd = IS_FORWARD ? A.m : -1;
   int iDelta = IS_FORWARD ? 1 : -1;
 
-  for (int i = iBegin; i != iEnd; i += iDelta) {
+  for (int i = iBegin + base; i != iEnd + base; i += iDelta) {
     double sum = b[i];
-    for (int j = A.rowptr[i]; j < A.rowptr[i + 1]; ++j) {
-      sum -= A.values[j]*y[A.colidx[j]];
+    for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+      sum -= values[j]*y[colidx[j]];
     }
-    y[i] += sum*A.idiag[i];
+    y[i] += sum*idiag[i];
   } // for each row
 }
 
 void forwardGSRef(const CSR& A, double y[], const double b[])
 {
-  gsRef<true>(A, y, b);
+  gsRef_<true>(A, y, b);
 }
 
 void backwardGSRef(const CSR& A, double y[], const double b[])
 {
-  gsRef<false>(A, y, b);
+  gsRef_<false>(A, y, b);
 }
 
 /**
@@ -132,6 +126,8 @@ void forwardGSWithBarrier(
   const LevelSchedule& schedule,
   const int *perm)
 {
+  ADJUST_FOR_BASE;
+
 #pragma omp parallel
   {
     int tid = omp_get_thread_num();
@@ -141,12 +137,12 @@ void forwardGSWithBarrier(
 
     for (int task = threadBoundaries[tid]; task < threadBoundaries[tid + 1]; ++task) {
       for (int i = taskBoundaries[task]; i < taskBoundaries[task + 1]; ++i) {
-        int row = perm[i];
+        int row = perm[i] + base;
         double sum = b[row];
-        for (int j = A.rowptr[row]; j < A.rowptr[row + 1]; ++j) {
-          sum -= A.values[j]*y[A.colidx[j]];
+        for (int j = rowptr[row]; j < rowptr[row + 1]; ++j) {
+          sum -= values[j]*y[colidx[j]];
         }
-        y[row] += sum*A.idiag[row];
+        y[row] += sum*idiag[row];
       } // for each row
 
       synk::Barrier::getInstance()->wait(tid);
@@ -163,6 +159,8 @@ void backwardGSWithBarrier(
   const LevelSchedule& schedule,
   const int *perm)
 {
+  ADJUST_FOR_BASE;
+
 #pragma omp parallel
   {
     int tid = omp_get_thread_num();
@@ -172,12 +170,12 @@ void backwardGSWithBarrier(
 
     for (int task = threadBoundaries[tid + 1] - 1; task >= threadBoundaries[tid]; --task) {
       for (int i = taskBoundaries[task + 1] - 1; i >= taskBoundaries[task]; --i) {
-        int row = perm[i];
+        int row = perm[i] + base;
         double sum = b[row];
-        for (int j = A.rowptr[row + 1] - 1; j >= A.rowptr[row]; --j) {
-          sum -= A.values[j]*y[A.colidx[j]];
+        for (int j = rowptr[row + 1] - 1; j >= rowptr[row]; --j) {
+          sum -= values[j]*y[colidx[j]];
         }
-        y[row] += sum*A.idiag[row];
+        y[row] += sum*idiag[row];
       } // for each row
       synk::Barrier::getInstance()->wait(tid);
     } // for each level
@@ -193,6 +191,8 @@ void forwardGS(
   const LevelSchedule& schedule,
   const int *perm)
 {
+  ADJUST_FOR_BASE;
+
 #pragma omp parallel
   {
     int nthreads = omp_get_num_threads();
@@ -218,12 +218,12 @@ void forwardGS(
       SPMP_LEVEL_SCHEDULE_WAIT;
 
       for (int i = taskBoundaries[task]; i < taskBoundaries[task + 1]; ++i) {
-        int row = perm[i];
+        int row = perm[i] + base;
         double sum = b[row];
-        for (int j = A.rowptr[row]; j < A.rowptr[row + 1]; ++j) {
-          sum -= A.values[j]*y[A.colidx[j]];
+        for (int j = rowptr[row]; j < rowptr[row + 1]; ++j) {
+          sum -= values[j]*y[colidx[j]];
         }
-        y[row] += sum*A.idiag[row];
+        y[row] += sum*idiag[row];
       }
 
       SPMP_LEVEL_SCHEDULE_NOTIFY;
@@ -240,6 +240,8 @@ void backwardGS(
   const LevelSchedule& schedule,
   const int *perm)
 {
+  ADJUST_FOR_BASE;
+
 #pragma omp parallel
   {
     int nthreads = omp_get_num_threads();
@@ -265,12 +267,12 @@ void backwardGS(
       SPMP_LEVEL_SCHEDULE_WAIT;
 
       for (int i = taskBoundaries[task + 1] - 1; i >= taskBoundaries[task]; --i) {
-        int row = perm[i];
+        int row = perm[i] + base;
         double sum = b[row];
-        for (int j = A.rowptr[row + 1] - 1; j >= A.rowptr[row]; --j) {
-          sum -= A.values[j]*y[A.colidx[j]];
+        for (int j = rowptr[row + 1] - 1; j >= rowptr[row]; --j) {
+          sum -= values[j]*y[colidx[j]];
         }
-        y[row] += sum*A.idiag[row];
+        y[row] += sum*idiag[row];
       }
 
       SPMP_LEVEL_SCHEDULE_NOTIFY;
@@ -286,6 +288,8 @@ void forwardGSWithBarrierAndReorderedMatrix(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule)
 {
+  ADJUST_FOR_BASE;
+
 #pragma omp parallel
   {
     int tid = omp_get_thread_num();
@@ -294,12 +298,12 @@ void forwardGSWithBarrierAndReorderedMatrix(
     const vector<int>& taskBoundaries = schedule.taskBoundaries;
 
     for (int task = threadBoundaries[tid]; task < threadBoundaries[tid + 1]; ++task) {
-      for (int i = taskBoundaries[task]; i < taskBoundaries[task + 1]; ++i) {
+      for (int i = taskBoundaries[task] + base; i < taskBoundaries[task + 1] + base; ++i) {
         double sum = b[i];
-        for (int j = A.rowptr[i]; j < A.rowptr[i + 1]; ++j) {
-          sum -= A.values[j]*y[A.colidx[j]];
+        for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+          sum -= values[j]*y[colidx[j]];
         }
-        y[i] += sum*A.idiag[i];
+        y[i] += sum*idiag[i];
       } // for each row
       synk::Barrier::getInstance()->wait(tid);
     } // for each level
@@ -314,6 +318,8 @@ void backwardGSWithBarrierAndReorderedMatrix(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule)
 {
+  ADJUST_FOR_BASE;
+
 #pragma omp parallel
   {
     int tid = omp_get_thread_num();
@@ -322,12 +328,12 @@ void backwardGSWithBarrierAndReorderedMatrix(
     const vector<int>& taskBoundaries = schedule.taskBoundaries;
 
     for (int task = threadBoundaries[tid + 1] - 1; task >= threadBoundaries[tid]; --task) {
-      for (int i = taskBoundaries[task + 1] - 1; i >= taskBoundaries[task]; --i) {
+      for (int i = taskBoundaries[task + 1] - 1 + base; i >= taskBoundaries[task] + base; --i) {
         double sum = b[i];
-        for (int j = A.rowptr[i + 1] - 1; j >= A.rowptr[i]; --j) {
-          sum -= A.values[j]*y[A.colidx[j]];
+        for (int j = rowptr[i + 1] - 1; j >= rowptr[i]; --j) {
+          sum -= values[j]*y[colidx[j]];
         }
-        y[i] += sum*A.idiag[i];
+        y[i] += sum*idiag[i];
       } // for each row
       synk::Barrier::getInstance()->wait(tid);
     } // for each level
@@ -342,6 +348,8 @@ void forwardGSWithReorderedMatrix(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule)
 {
+  ADJUST_FOR_BASE;
+
 #pragma omp parallel
   {
     int nthreads = omp_get_num_threads();
@@ -366,12 +374,12 @@ void forwardGSWithReorderedMatrix(
     for (int task = threadBoundaries[tid]; task < threadBoundaries[tid + 1]; ++task) {
       SPMP_LEVEL_SCHEDULE_WAIT;
 
-      for (int i = taskBoundaries[task]; i < taskBoundaries[task + 1]; ++i) {
+      for (int i = taskBoundaries[task] + base; i < taskBoundaries[task + 1] + base; ++i) {
         double sum = b[i];
-        for (int j = A.rowptr[i]; j < A.rowptr[i + 1]; ++j) {
-          sum -= A.values[j]*y[A.colidx[j]];
+        for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+          sum -= values[j]*y[colidx[j]];
         }
-        y[i] += sum*A.idiag[i];
+        y[i] += sum*idiag[i];
       }
 
       SPMP_LEVEL_SCHEDULE_NOTIFY;
@@ -387,6 +395,8 @@ void backwardGSWithReorderedMatrix(
   const CSR& A, double y[], const double b[],
   const LevelSchedule& schedule)
 {
+  ADJUST_FOR_BASE;
+
 #pragma omp parallel
   {
     int nthreads = omp_get_num_threads();
@@ -411,19 +421,18 @@ void backwardGSWithReorderedMatrix(
     for (int task = threadBoundaries[tid + 1] - 1; task >= threadBoundaries[tid]; --task) {
       SPMP_LEVEL_SCHEDULE_WAIT;
 
-      for (int i = taskBoundaries[task + 1] - 1; i >= taskBoundaries[task]; --i) {
+      for (int i = taskBoundaries[task + 1] - 1 + base; i >= taskBoundaries[task] + base; --i) {
         double sum = b[i];
-        for (int j = A.rowptr[i + 1] - 1; j >= A.rowptr[i]; --j) {
-          sum -= A.values[j]*y[A.colidx[j]];
+        for (int j = rowptr[i + 1] - 1; j >= rowptr[i]; --j) {
+          sum -= values[j]*y[colidx[j]];
         }
-        y[i] += sum*A.idiag[i];
+        y[i] += sum*idiag[i];
       }
 
       SPMP_LEVEL_SCHEDULE_NOTIFY;
     } // for each task
   } // omp parallel
 }
-
 
 int main(int argc, char **argv)
 {
@@ -511,7 +520,7 @@ int main(int argc, char **argv)
   double timesForward[REPEAT], timesBackward[REPEAT];
 
   for (int o = REFERENCE; o <= P2P_WITH_TRANSITIVE_REDUCTION; ++o) {
-    Option option = (Option)o;
+    SynchronizationOption option = (SynchronizationOption)o;
 
     for (int i = 0; i < REPEAT; ++i) {
       flushLlc();
@@ -577,7 +586,7 @@ int main(int argc, char **argv)
   double *tempVector = MALLOC(double, A->m);
 
   for (int o = BARRIER; o <= P2P_WITH_TRANSITIVE_REDUCTION; ++o) {
-    Option option = (Option)o;
+    SynchronizationOption option = (SynchronizationOption)o;
 
     for (int i = 0; i < REPEAT; ++i) {
       flushLlc();

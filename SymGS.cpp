@@ -9,8 +9,11 @@ using namespace SpMP;
 namespace SpMP
 {
 
-void splitLU(const CSR& A, CSR *L, CSR *U)
+void splitLU(CSR& A, CSR *L, CSR *U)
 {
+  int oldBase = A.getBase();
+  A.make0BasedIndexing();
+
   L->dealloc();
   U->dealloc();
 
@@ -106,23 +109,31 @@ void splitLU(const CSR& A, CSR *L, CSR *U)
         rowPtrPartialSum[1][tid + 1] - (A.rowptr[iEnd] - extptr[iEnd - 1]);
     }
   } // omp parallel
+
+  if (1 == oldBase) {
+    A.make1BasedIndexing();
+    L->make1BasedIndexing();
+    U->make1BasedIndexing();
+  }
 }
 
 bool getSymmetricNnzPattern(
   const CSR *A, int **symRowPtr, int **symDiagPtr, int **symExtPtr, int **symColIdx)
 {
-  int m = A->m;
-  const int *rowptr = A->rowptr;
-  const int *colidx = A->colidx;
+  int base = A->getBase();
 
-  const int *extptr = A->extptr ? A->extptr : rowptr + 1;
+  int m = A->m;
+  const int *rowptr = A->rowptr - base;
+  const int *colidx = A->colidx - base;
+  const int *extptr = A->extptr ? A->extptr - base : rowptr + 1;
 
   size_t symRowPtrBegin;
   if (A->useMemoryPool_()) {
     symRowPtrBegin = MemoryPool::getSingleton()->getTail();
   }
   *symRowPtr = A->allocate_<int>(m + 1);
-  (*symRowPtr)[0] = 0;
+  (*symRowPtr)[0] = base;
+  *symRowPtr -= base;
   int *cnts = NULL;
 
   volatile bool isSymmetric = true;
@@ -135,6 +146,8 @@ bool getSymmetricNnzPattern(
 
     int iBegin, iEnd;
     getSimpleThreadPartition(&iBegin, &iEnd, m);
+    iBegin += base;
+    iEnd += base;
 
 #ifdef PRINT_TIME_BREAKDOWN
     unsigned long long t = __rdtsc();
@@ -179,13 +192,18 @@ bool getSymmetricNnzPattern(
 #pragma omp single
       {
         // FIXME - parallel prefix sum
-        for (int i = 0; i < m; ++i) {
+        for (int i = base; i < m + base; ++i) {
           (*symRowPtr)[i + 1] += (*symRowPtr)[i];
         }
         *symColIdx = MALLOC(int, (*symRowPtr)[m]);
+        *symColIdx -= base;
 
         *symDiagPtr = MALLOC(int, m + 1);
-        if (A->extptr) *symExtPtr = MALLOC(int, m + 1);
+        *symDiagPtr -= base;
+        if (A->extptr) {
+          *symExtPtr = MALLOC(int, m + 1);
+          *symExtPtr -= base;
+        }
         cnts = MALLOC(int, m);
       }
 
@@ -251,8 +269,13 @@ bool getSymmetricNnzPattern(
       }
 #undef PRINT_TIME_BREAKDOWN
 #endif
+
+      *symColIdx += base;
+      if (*symExtPtr) *symExtPtr += base;
     } // !isSymmetric
   } // omp parallel
+
+  *symRowPtr += base;
 
   if (isSymmetric) {
     if (!A->useMemoryPool_()) {

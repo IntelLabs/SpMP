@@ -45,7 +45,7 @@ bool CSR::useMemoryPool_() const
   return MemoryPool::getSingleton()->contains(rowptr);
 }
 
-CSR::CSR() : rowptr(NULL), colidx(NULL), values(NULL), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL), base(0), ownData_(false)
+CSR::CSR() : rowptr(NULL), colidx(NULL), values(NULL), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL), ownData_(false)
 {
 }
 
@@ -73,16 +73,16 @@ void CSR::alloc(int m, int nnz, bool createSeparateDiagData /*= true*/)
   ownData_ = true;
 }
 
-CSR::CSR(int m, int n, int nnz, int base /*=0*/)
- : base(base), extptr(NULL)
+CSR::CSR(int m, int n, int nnz)
+ : extptr(NULL)
 {
   this->m=m;
   this->n=n;
   alloc(m, nnz);
 }
 
-CSR::CSR(const char *fileName, bool forceSymmetric /*=false*/, int pad /*=1*/)
- : base(0), rowptr(NULL), colidx(NULL), values(NULL), ownData_(true), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL)
+CSR::CSR(const char *fileName, int base /*=0*/, bool forceSymmetric /*=false*/, int pad /*=1*/)
+ : rowptr(NULL), colidx(NULL), values(NULL), ownData_(true), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL)
 {
   int m = atoi(fileName);
   char buf[1024];
@@ -91,10 +91,10 @@ CSR::CSR(const char *fileName, bool forceSymmetric /*=false*/, int pad /*=1*/)
   int l = strlen(fileName);
 
   if (!strcmp(buf, fileName)) {
-    generate3D27PtLaplacian(this, m);
+    generate3D27PtLaplacian(this, m, base);
   }
   else if (l > 4 && !strcmp(fileName + l - 4, ".bin")) {
-    loadBin(fileName);
+    loadBin(fileName, base);
   }
   else {
     COO Acoo;
@@ -102,14 +102,15 @@ CSR::CSR(const char *fileName, bool forceSymmetric /*=false*/, int pad /*=1*/)
 
     alloc(Acoo.m, Acoo.nnz);
 
-    dcoo2csr(this, &Acoo);
+    dcoo2csr(this, &Acoo, base);
   }
 }
 
-CSR::CSR(int m, int n, int *rowptr, int *colidx, double *values, int base /*=0*/) :
- m(m), n(n), rowptr(rowptr), colidx(colidx), values(values), ownData_(false), idiag(NULL), diag(NULL), extptr(NULL), base(base)
+CSR::CSR(int m, int n, int *rowptr, int *colidx, double *values) :
+ m(m), n(n), rowptr(rowptr), colidx(colidx), values(values), ownData_(false), idiag(NULL), diag(NULL), extptr(NULL)
 {
   diagptr = MALLOC(int, m);
+  int base = getBase();
 #pragma omp parallel for
   for (int i = 0; i < m; ++i) {
     for (int j = rowptr[i] - base; j < rowptr[i + 1] - base; ++j) {
@@ -152,9 +153,15 @@ CSR::~CSR()
   dealloc();
 }
 
-bool CSR::isSymmetric(bool checkValues /*=true*/, bool printFirstNonSymmetry /* = false*/) const
+bool CSR::isSymmetric(bool checkValues, bool printFirstNonSymmetry) const
 {
-  const int *extptr = this->extptr ? this->extptr : rowptr + 1;
+  int base = getBase();
+
+  const int *rowptr = this->rowptr - base;
+  const int *extptr = this->extptr ? this->extptr - base : rowptr + 1;
+  const int *colidx = this->colidx - base;
+  const double *values = this->values ? this->values - base : NULL;
+
   if (!printFirstNonSymmetry) {
     volatile bool isSymmetric = true;
 
@@ -162,13 +169,16 @@ bool CSR::isSymmetric(bool checkValues /*=true*/, bool printFirstNonSymmetry /* 
     {
       int begin, end;
       getSimpleThreadPartition(&begin, &end, m);
+      begin += base;
+      end += base;
+
       for (int i = begin; i < end; ++i) {
-        for (int j = rowptr[i] - base; j < extptr[i] - base; ++j) {
-          int c = colidx[j] - base;
+        for (int j = rowptr[i]; j < extptr[i]; ++j) {
+          int c = colidx[j];
           if (c != i) {
             bool hasPair = false;
-            for (int k = rowptr[c] - base; k < extptr[c] - base; ++k) {
-              if (colidx[k] - base == i) {
+            for (int k = rowptr[c]; k < extptr[c]; ++k) {
+              if (colidx[k] == i) {
                 hasPair = true;
                 if (checkValues && values[j] != values[k]) {
                   isSymmetric = false;
@@ -188,13 +198,13 @@ bool CSR::isSymmetric(bool checkValues /*=true*/, bool printFirstNonSymmetry /* 
     return isSymmetric;
   }
   else {
-    for (int i = 0; i < m; ++i) {
-      for (int j = rowptr[i] - base; j < extptr[i] - base; ++j) {
-        int c = colidx[j] - base;
+    for (int i = base; i < m + base; ++i) {
+      for (int j = rowptr[i]; j < extptr[i]; ++j) {
+        int c = colidx[j];
         if (c != i) {
           bool hasPair = false;
-          for (int k = rowptr[c] - base; k < extptr[c] - base; ++k) {
-            if (colidx[k] - base == i) {
+          for (int k = rowptr[c]; k < extptr[c]; ++k) {
+            if (colidx[k] == i) {
               hasPair = true;
               if (checkValues && values[j] != values[k]) {
                 printf(
@@ -249,7 +259,7 @@ void CSR::storeMatrixMarket(const char *fileName) const
 
 static const int MAT_FILE_CLASSID = 1211216;
 
-void CSR::loadBin(const char *file_name)
+void CSR::loadBin(const char *file_name, int base /*=0*/)
 {
   dealloc();
  
@@ -293,10 +303,22 @@ void CSR::loadBin(const char *file_name)
   }
  
   fclose(fp);
+
+  if (1 == base) {
+    make1BasedIndexing();
+  }
+  else {
+    assert(0 == base);
+  }
 }
 
-void CSR::storeBin(const char *fileName) const
+void CSR::storeBin(const char *fileName)
 {
+  bool was1Based = 1 == getBase();
+  if (was1Based) {
+    make0BasedIndexing();
+  }
+
   FILE *fp = fopen(fileName, "w");
   if (!fp) {
     fprintf(stderr, "Failed to open %s\n", fileName);
@@ -308,7 +330,7 @@ void CSR::storeBin(const char *fileName) const
 
   fwrite(&m, sizeof(m), 1, fp);
   fwrite(&n, sizeof(n), 1, fp);
-  int nnz = rowptr[m];
+  int nnz = getNnz();
   fwrite(&nnz, sizeof(nnz), 1, fp);
 
   int *rownnz = (int *)malloc(sizeof(int)*m);
@@ -322,17 +344,22 @@ void CSR::storeBin(const char *fileName) const
   fwrite(values, sizeof(values[0]), nnz, fp);
 
   fclose(fp);
+
+  if (was1Based) {
+    make1BasedIndexing();
+  }
 }
 
 void CSR::make0BasedIndexing()
 {
-  if (0 == base) return;
+  if (0 == getBase()) return;
+
+  int nnz = getNnz();
 
 #pragma omp parallel for
   for(int i=0; i <= m; i++)
     rowptr[i]--;
 
-  int nnz = rowptr[m];
 #pragma omp parallel for
   for(int i=0; i < nnz; i++)
     colidx[i]--;
@@ -342,15 +369,14 @@ void CSR::make0BasedIndexing()
     for (int i = 0; i < m; i++)
       diagptr[i]--;
   }
-
-  base = 0;
 }
 
 void CSR::make1BasedIndexing()
 {
-  if (1 == base) return;
+  if (1 == getBase()) return;
 
-  int nnz = rowptr[m];
+  int nnz = getNnz();
+
 #pragma omp parallel for
   for(int i=0; i <= m; i++)
     rowptr[i]++;
@@ -364,13 +390,14 @@ void CSR::make1BasedIndexing()
     for (int i = 0; i < m; i++)
       diagptr[i]++;
   }
-
-  base = 1;
 }
 
 void CSR::computeInverseDiag()
 {
   if (!idiag) {
+    int base = getBase();
+    const double *values = this->values - base;
+
     idiag = MALLOC(double, m);
 #pragma omp parallel for
     for (int i = 0; i < m; i++) {
@@ -395,9 +422,12 @@ static inline int transpose_idx(int idx, int dim1, int dim2)
  */
 CSR *CSR::transpose() const
 {
-  assert(base == 0);
+  int base = getBase();
+  const int *rowptr = this->rowptr - base;
+  const int *colidx = this->colidx - base;
+  const double *values = this->values ? this->values - base : NULL;
 
-  int nnz = rowptr[m];
+  int nnz = getNnz();
 
   CSR *AT = new CSR();
 
@@ -420,12 +450,12 @@ CSR *CSR::transpose() const
 
   double t = omp_get_wtime();
 
-  int *bucket = MALLOC(
-    int, (n + 1)*omp_get_max_threads());
+  int *bucket = MALLOC(int, (n + 1)*omp_get_max_threads());
+  bucket -= base;
 
 #ifndef NDEBUG
   int i;
-  for (i = 0; i < m; ++i) {
+  for (i = base; i < m + base; ++i) {
     assert(rowptr[i + 1] >= rowptr[i]);
   }
 #endif
@@ -436,20 +466,22 @@ CSR *CSR::transpose() const
   int tid = omp_get_thread_num();
 
   int iBegin, iEnd;
-  getLoadBalancedPartition(&iBegin, &iEnd, rowptr, m);
+  getLoadBalancedPartition(&iBegin, &iEnd, rowptr + base, m);
+  iBegin += base;
+  iEnd += base;
 
   int i, j;
-  memset(bucket + tid*n, 0, sizeof(int)*n);
+  memset(bucket + base + tid*n, 0, sizeof(int)*n);
 
   // count the number of keys that will go into each bucket
   for (j = rowptr[iBegin]; j < rowptr[iEnd]; ++j) {
     int idx = colidx[j];
 #ifndef NDEBUG
-    if (idx < 0 || idx >= n) {
+    if (idx < base || idx >= n + base) {
       printf("tid = %d m = %d n = %d nnz = %d iBegin = %d iEnd = %d rowptr[iBegin] = %d rowptr[iEnd] = %d j = %d idx = %d\n", tid, m, n, nnz, iBegin, iEnd, rowptr[iBegin], rowptr[iEnd], j, idx);
     }
 #endif
-    assert(idx >= 0 && idx < n);
+    assert(idx >= base && idx < n + base);
     bucket[tid*n + idx]++;
   }
   // up to here, bucket is used as int[nthreads][n] 2D array
@@ -461,7 +493,7 @@ CSR *CSR::transpose() const
     int transpose_i = transpose_idx(i, nthreads, n);
     int transpose_i_minus_1 = transpose_idx(i - 1, nthreads, n);
 
-    bucket[transpose_i] += bucket[transpose_i_minus_1];
+    bucket[transpose_i + base] += bucket[transpose_i_minus_1 + base];
   }
 
 #pragma omp barrier
@@ -472,7 +504,8 @@ CSR *CSR::transpose() const
       int transpose_j0 = transpose_idx(j0, nthreads, n);
       int transpose_j1 = transpose_idx(j1, nthreads, n);
 
-      bucket[transpose_j1] += bucket[transpose_j0];
+      bucket[transpose_j1 + base] += bucket[transpose_j0 + base];
+      printf("%d\n", bucket[transpose_j1 + base]);
     }
   }
 #pragma omp barrier
@@ -483,7 +516,7 @@ CSR *CSR::transpose() const
     for (i = tid*n; i < (tid + 1)*n - 1; ++i) {
       int transpose_i = transpose_idx(i, nthreads, n);
 
-      bucket[transpose_i] += bucket[transpose_i0];
+      bucket[transpose_i + base] += bucket[transpose_i0 + base];
     }
   }
 
@@ -516,36 +549,51 @@ CSR *CSR::transpose() const
     }
   }
 
+  if (base > 0) {
+#pragma omp barrier
+#pragma omp for
+    for (int i = base; i < n + base; i++) {
+      bucket[i] += base;
+    }
+    assert(bucket[base] == base);
+  }
+
   if (diagptr) {
 #pragma omp barrier
 
-    bucket[n] = nnz;
+    bucket[n + base] = nnz + base;
+
+    int *AT_colidx = AT->colidx - base;
+    int *AT_diagptr = AT->diagptr - base;
 
 #pragma omp for
-    for (int i = 0; i < n; i++) {
+    for (int i = base; i < n + base; i++) {
       for (int j = bucket[i]; j < bucket[i + 1]; ++j) {
-        int c = AT->colidx[j];
-        if (c == i) AT->diagptr[i] = j;
+        int c = AT_colidx[j];
+        if (c == i) AT_diagptr[i] = j;
       }
     }
   }
 
   } // omp parallel
 
-  bucket[n] = nnz;
-  AT->rowptr = bucket; 
+  bucket[n + base] = nnz + base;
+  AT->rowptr = bucket + base; 
 
   return AT;
 }
 
-template<int BASE = 0>
-int getBandwidth_(const CSR *A)
+int CSR::getBandwidth() const
 {
+  int base = getBase();
+  const int *rowptr = this->rowptr - base;
+  const int *colidx = this->colidx - base;
+
   int bw = INT_MIN;
 #pragma omp parallel for reduction(max:bw)
-  for (int i = 0; i < A->m; ++i) {
-    for (int j = A->rowptr[i] - BASE; j < A->rowptr[i + 1] - BASE; ++j) {
-      int c = A->colidx[j] - BASE;
+  for (int i = base; i < m + base; ++i) {
+    for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+      int c = colidx[j];
       int temp = c - i;
       if (temp < 0) temp = -temp;
       bw = max(temp, bw);
@@ -554,19 +602,13 @@ int getBandwidth_(const CSR *A)
   return bw;
 }
 
-int CSR::getBandwidth() const
-{
-  if (0 == base) {
-    return getBandwidth_<0>(this);
-  }
-  else {
-    assert(1 == base);
-    return getBandwidth_<1>(this);
-  }
-}
-
 bool CSR::equals(const CSR& A, bool print /*=false*/) const
 {
+  int base = getBase();
+  if (A.getBase() != base) {
+    if (print) printf("base differs %d vs. %d\n", base, A.getBase());
+    return false;
+  }
   if (m != A.m) {
     if (print) printf("number of rows differs %d vs. %d\n", m, A.m);
     return false;
@@ -584,7 +626,7 @@ bool CSR::equals(const CSR& A, bool print /*=false*/) const
       if (print) printf("rowptr[%d] differs %d vs. %d\n", i, rowptr[i], A.rowptr[i]);
       return false;
     }
-    for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+    for (int j = rowptr[i] - base; j < rowptr[i + 1] - base; ++j) {
       if (colidx[j] != A.colidx[j]) {
         if (print) printf("colidx[%d:%d] differs %d vs. %d\n", i, j, colidx[j], A.colidx[j]);
         return false;
@@ -601,6 +643,7 @@ bool CSR::equals(const CSR& A, bool print /*=false*/) const
 
 void CSR::print() const
 {
+  int base = getBase();
   for (int i = 0; i < m; i++) {
     for (int j = rowptr[i] - base; j < rowptr[i + 1] - base; j++) {
       printf("%d %d %g\n", i + base, colidx[j], values[j]);

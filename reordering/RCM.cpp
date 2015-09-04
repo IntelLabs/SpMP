@@ -634,7 +634,7 @@ void CSR::getRCMPermutation(int *perm, int *inversePerm, bool pseudoDiameterSour
   }
   assert(isSymmetric(false)); // check structural symmetry
 
-  int oldBase = base;
+  int oldBase = getBase();
   make0BasedIndexing();
 
   // 1. Start vertex
@@ -943,7 +943,7 @@ void CSR::getBFSPermutation(int *perm, int *inversePerm)
   }
   assert(isSymmetric(false)); // check structural symmetry
 
-  int oldBase = base;
+  int oldBase = getBase();
   make0BasedIndexing();
 
   BitVector bv(m);

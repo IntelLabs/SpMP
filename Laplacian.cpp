@@ -27,7 +27,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace SpMP
 {
 
-void generate3D27PtLaplacian(CSR *A, int nx, int ny, int nz) {
+void generate3D27PtLaplacian(CSR *A, int nx, int ny, int nz, int base /*=0*/) {
   A->dealloc();
 
   A->m = A->n = nx*ny*nz;
@@ -122,11 +122,18 @@ void generate3D27PtLaplacian(CSR *A, int nx, int ny, int nz) {
     } // iy
   } // iz
 
+  if (1 == base) {
+    A->make1BasedIndexing();
+  }
+  else {
+    assert(0 == base);
+  }
+
   assert(idx == nnz);
 }
 
-void generate3D27PtLaplacian(CSR *A, int n) {
-  generate3D27PtLaplacian(A, n, n, n);
+void generate3D27PtLaplacian(CSR *A, int n, int base /*=0*/) {
+  generate3D27PtLaplacian(A, n, n, n, base);
 }
 
 } // namespace SpMP

@@ -55,11 +55,12 @@ bool loadMatrixMarketTransposed (const char *fileName, COO &Acoo, int pad = 1);
 /**
  * @param createSeparateDiagData true then populate diag and idiag
  */
-void dcoo2csr(CSR *Acrs, const COO *Acoo, bool createSeparateDiagData = true);
+void dcoo2csr(CSR *Acrs, const COO *Acoo, int outBase = 0, bool createSeparateDiagData = true);
 void dcoo2csr(
   int m, int nnz,
   int *rowptr, int *colidx, double *values,
   const int *cooRowidx, const int *cooColidx, const double *cooValues,
-  bool sort = true);
+  bool sort = true,
+  int outBase = 0);
 
 } // namespace SpMP

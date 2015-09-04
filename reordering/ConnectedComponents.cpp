@@ -333,11 +333,11 @@ void findConnectedComponents(
   int *numOfComponents, int **compToRoot, int **compSizes, int **compSizePrefixSum,
   int **nodesSortedByComp)
 {
-  if (0 == A->base) {
+  if (0 == A->getBase()) {
     findConnectedComponents_<0>(A, numOfComponents, compToRoot, compSizes, compSizePrefixSum, nodesSortedByComp);
   }
   else {
-    assert(1 == A->base);
+    assert(1 == A->getBase());
     findConnectedComponents_<1>(A, numOfComponents, compToRoot, compSizes, compSizePrefixSum, nodesSortedByComp);
   }
 }
@@ -348,11 +348,11 @@ void findConnectedComponentsWithBitVector(
   int **nodesSortedByComp,
   const BitVector *bv)
 {
-  if (0 == A->base) {
+  if (0 == A->getBase()) {
     findConnectedComponents_<0, true>(A, numOfComponents, compToRoot, compSizes, compSizePrefixSum, nodesSortedByComp, bv);
   }
   else {
-    assert(1 == A->base);
+    assert(1 == A->getBase());
     findConnectedComponents_<1, true>(A, numOfComponents, compToRoot, compSizes, compSizePrefixSum, nodesSortedByComp, bv);
   }
 }

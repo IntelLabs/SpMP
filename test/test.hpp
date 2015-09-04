@@ -77,3 +77,20 @@ void initializeX(double *x, int n) {
 #pragma omp parallel for
   for (int i = 0; i < n; ++i) x[i] = n - i;
 }
+
+typedef enum
+{
+  REFERENCE = 0,
+  BARRIER,
+  P2P,
+  P2P_WITH_TRANSITIVE_REDUCTION,
+} SynchronizationOption;
+
+#define ADJUST_FOR_BASE \
+  int base = A.getBase(); \
+  const int *rowptr = A.rowptr - base; \
+  const int *colidx = A.colidx - base; \
+  const double *values = A.values - base; \
+  const double *idiag = A.idiag - base; \
+  y -= base; \
+  b -= base;

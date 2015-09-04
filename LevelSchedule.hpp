@@ -177,27 +177,6 @@ public :
 
   FusedGSAndSpMVSchedule *fusedSchedule;
 
-  void findLevels(const CSR& A);
-
-  void findLevels(const CSR& A, const CostFunction& costFunction);
-
-  void findLevels(
-    int m, const int *rowptr, const int *colidx,
-    const CostFunction& costFunction);
-
-  /**
-   * findLevels version that is not dependent on crs_t type
-   *
-   * @params diagptr points to the index where the diag elem of each row locates
-   *
-   * @note in each row, lower diagonal values should appear before diag and
-   *       upper diagonal values should appear after diag.
-   */
-  void findLevels(
-    int m,
-    const int *rowptr, const int *diagptr, const int *colidx,
-    const CostFunction& costFunction);
-
   /**
    * Find levels and partition each level.
    * Remove intra-thread, duplicated, and transitive edges
@@ -246,15 +225,6 @@ public :
     const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
     const CostFunction& costFunction);
 
-protected:
-  /**
-   * findLevels version that supports a matrix distributed over multiple MPI nodes
-   */
-  void findLevels(
-    int m,
-    const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
-    const CostFunction& costFunction);
-
   template<class T> T *allocate(size_t n)
   {
     if (useMemoryPool) {
@@ -274,6 +244,9 @@ protected:
       return MALLOC(T, n);
     }
   }
+
+protected:
+
   void init_();
 };
 

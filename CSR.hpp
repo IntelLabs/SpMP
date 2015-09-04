@@ -42,23 +42,19 @@ public:
   int *colidx;
   double *values;
 
-  int base; // 0: 0-based, 0: 1-based
-
   double *idiag; /**< inverse of diagonal elements */
   double *diag;
   int *diagptr;
   int *extptr; // points to the beginning of non-local columns (when MPI is used)
 
-  //std::vector<int> levvec;
-
   CSR();
 
   // Following two constructors will make CSR own the data
-  CSR(const char *file, bool forceSymmetric = false, int pad = 1);
-  CSR(int m, int n, int nnz, int base = 0);
+  CSR(const char *file, int base = 0, bool forceSymmetric = false, int pad = 1);
+  CSR(int m, int n, int nnz);
 
   // Following constructor will make CSR does not own the data
-  CSR(int m, int n, int *rowptr, int *colidx, double *values, int base = 0);
+  CSR(int m, int n, int *rowptr, int *colidx, double *values);
  
   ~CSR();
 
@@ -66,11 +62,11 @@ public:
   /**
    * Load PETSc bin format
    */
-  void loadBin(const char *fileName);
+  void loadBin(const char *fileName, int base = 0);
   /**
    * Load PETSc bin format
    */
-  void storeBin(const char *fileName) const;
+  void storeBin(const char *fileName);
 
   /**
    * permutes current matrix based on permutation vector "perm"
@@ -166,7 +162,8 @@ public:
 
   int getBandwidth() const;
   bool equals(const CSR& A, bool print = false) const;
-  int getNnz() const { return rowptr[m] - base; }
+  int getNnz() const { return rowptr[m] - getBase(); }
+  int getBase() const { return rowptr[0]; }
 
   void print() const;
 
@@ -184,10 +181,10 @@ private:
   bool ownData_;
 }; // CSR
 
-void generate3D27PtLaplacian(CSR *A, int nx, int ny, int nz);
-void generate3D27PtLaplacian(CSR *A, int n);
+void generate3D27PtLaplacian(CSR *A, int nx, int ny, int nz, int base = 0);
+void generate3D27PtLaplacian(CSR *A, int n, int base = 0);
 
-void splitLU(const CSR& A, CSR *L, CSR *U);
+void splitLU(CSR& A, CSR *L, CSR *U);
 bool getSymmetricNnzPattern(
   const CSR *A, int **symRowPtr, int **symDiagPtr, int **symExtPtr, int **symColIdx);
 
