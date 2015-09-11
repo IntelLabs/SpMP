@@ -90,10 +90,14 @@ CSR *CSR::permuteRowptr(const int *reversePerm) const
   int nnz = rowptr[m];
   ret->colidx = MALLOC(int, nnz);
   assert(ret->colidx);
-  ret->values = MALLOC(double, nnz);
-  assert(ret->values);
-  ret->idiag = MALLOC(double, m);
-  assert(ret->idiag);
+  if (values) {
+    ret->values = MALLOC(double, nnz);
+    assert(ret->values);
+  }
+  if (idiag) {
+    ret->idiag = MALLOC(double, m);
+    assert(ret->idiag);
+  }
   if (diagptr) {
     ret->diagptr = MALLOC(int, m);
     assert(ret->diagptr);
@@ -188,7 +192,7 @@ static void permuteMain_(
   int *newDiagptr = out->diagptr ? out->diagptr - BASE : NULL;
   int *newExtptr = out->extptr ? out->extptr - BASE : newRowptr + 1;
   int *newColidx = out->colidx - BASE;
-  T *newValues = out->values - BASE;
+  T *newValues = out->values ? out->values - BASE : NULL;
   T *newIdiag = out->idiag ? out->idiag - BASE : NULL;
 
   columnPerm -= BASE;
@@ -213,7 +217,7 @@ static void permuteMain_(
         int newColIdx = columnPerm[colIdx] + BASE;
 
         newColidx[k] = newColIdx;
-        newValues[k] = values[j];
+        if (values) newValues[k] = values[j];
 
         if (diagptr && colidx[j] == row) {
           diagCol = newColIdx;
@@ -283,7 +287,7 @@ static void permuteRowsMain_(
   const int *rowptr = in->rowptr - BASE;
   const int *colidx = in->colidx - BASE;
   const int *diagptr = in->diagptr ? in->diagptr - BASE : NULL;
-  const T *values = in->values - BASE;
+  const T *values = in->values ? in->values - BASE : NULL;
   const T *idiag = in->idiag ? in->idiag - BASE : NULL;
 
   int m = in->m;
@@ -300,7 +304,8 @@ static void permuteRowsMain_(
       int begin = rowptr[row], end = rowptr[row + 1];
       int newBegin = out->rowptr[i] - BASE;
 
-      memcpy(out->values + newBegin, values + begin, (end - begin)*sizeof(double));
+      if (values)
+        memcpy(out->values + newBegin, values + begin, (end - begin)*sizeof(double));
       memcpy(out->colidx + newBegin, colidx + begin, (end - begin)*sizeof(int));
 
       if (diagptr)
