@@ -155,7 +155,7 @@ CSR::~CSR()
 
 bool CSR::isSymmetric(bool checkValues, bool printFirstNonSymmetry) const
 {
-  if (m != n) {
+  if (m != n && !extptr) {
     if (printFirstNonSymmetry) {
       printf("Not square\n");
     }
