@@ -84,9 +84,9 @@ int main(int argc, char **argv)
   }
 
   CSR *A = new CSR(argv[1], 0, true /* force-symmetric */);
-  int nnz = A->rowptr[A->m];
+  int nnz = A->getNnz();
   double flops = 2*nnz;
-  double bytes = (sizeof(double) + sizeof(int))*nnz;
+  double bytes = (sizeof(double) + sizeof(int))*nnz + sizeof(double)*(A->m + A->n);
 
   printf("original bandwidth %d\n", A->getBandwidth());
 
