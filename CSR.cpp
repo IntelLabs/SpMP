@@ -107,15 +107,17 @@ CSR::CSR(const char *fileName, int base /*=0*/, bool forceSymmetric /*=false*/, 
 }
 
 CSR::CSR(int m, int n, int *rowptr, int *colidx, double *values) :
- m(m), n(n), rowptr(rowptr), colidx(colidx), values(values), ownData_(false), idiag(NULL), diag(NULL), extptr(NULL)
+ m(m), n(n), rowptr(rowptr), colidx(colidx), values(values), ownData_(false), idiag(NULL), diag(NULL), extptr(NULL), diagptr(NULL)
 {
-  diagptr = MALLOC(int, m);
-  int base = getBase();
+  if (m == n) {
+    diagptr = MALLOC(int, m);
+    int base = getBase();
 #pragma omp parallel for
-  for (int i = 0; i < m; ++i) {
-    for (int j = rowptr[i] - base; j < rowptr[i + 1] - base; ++j) {
-      if (colidx[j] - base == i) {
-        diagptr[i] = j + base;
+    for (int i = 0; i < m; ++i) {
+      for (int j = rowptr[i] - base; j < rowptr[i + 1] - base; ++j) {
+        if (colidx[j] - base == i) {
+          diagptr[i] = j + base;
+        }
       }
     }
   }
