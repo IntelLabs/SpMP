@@ -34,6 +34,8 @@ namespace SpMP
 
 void CSR::permuteRowptr(CSR *ret, const int *reversePerm) const
 {
+  assert(isPerm(reversePerm, m));
+
   int base = getBase();
 
   int rowPtrSum[omp_get_max_threads() + 1];
