@@ -129,6 +129,15 @@ void reorderVectorWithInversePerm(double *v, double *tmp, const int *inversePerm
 void reorderVector(double *v, const int *perm, int len);
 void reorderVectorWithInversePerm(double *v, const int *inversePerm, int len);
 
+template<class T>
+void copyVector(T *out, const T *in, int len)
+{
+#pragma omp parallel for
+  for (int i = 0; i < len; ++i) {
+    out[i] = in[i];
+  }
+}
+
 #define USE_LARGE_PAGE
 #ifdef USE_LARGE_PAGE
 #include <assert.h>
