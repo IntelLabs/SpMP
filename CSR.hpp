@@ -52,6 +52,7 @@ public:
   // Following two constructors will make CSR own the data
   CSR(const char *file, int base = 0, bool forceSymmetric = false, int pad = 1);
   CSR(int m, int n, int nnz);
+  CSR(const CSR& A);
 
   // Following constructor will make CSR does not own the data
   CSR(int m, int n, int *rowptr, int *colidx, double *values);

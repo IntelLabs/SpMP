@@ -74,11 +74,28 @@ void CSR::alloc(int m, int nnz, bool createSeparateDiagData /*= true*/)
 }
 
 CSR::CSR(int m, int n, int nnz)
- : extptr(NULL)
+ : m(m), n(n), extptr(NULL)
 {
-  this->m=m;
-  this->n=n;
   alloc(m, nnz);
+}
+
+CSR::CSR(const CSR& A) : m(A.m), n(A.n), values(NULL), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL), ownData_(true)
+{
+  int nnz = A.getNnz();
+
+  rowptr = MALLOC(int, m + 1);
+  colidx = MALLOC(int, nnz);
+  if (A.values) values = MALLOC(double, nnz);
+  if (A.diagptr) diagptr = MALLOC(int, m);
+  if (A.idiag) idiag = MALLOC(double, m);
+  if (A.diag) diag = MALLOC(double, m);
+
+  copyVector(rowptr, A.rowptr, A.m + 1);
+  copyVector(colidx, A.colidx, nnz);
+  if (values) copyVector(values, A.values, nnz);
+  if (diagptr) copyVector(diagptr, A.diagptr, m);
+  if (idiag) copyVector(idiag, A.idiag, m);
+  if (diag) copyVector(diag, A.diag, m);
 }
 
 CSR::CSR(const char *fileName, int base /*=0*/, bool forceSymmetric /*=false*/, int pad /*=1*/)
