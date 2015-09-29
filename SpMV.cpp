@@ -42,6 +42,8 @@ static void SpMV_(
   const T *y,
   T gamma)
 {
+  assert(w != x);
+
   int base = rowptr[0];
 
   rowptr -= base;
