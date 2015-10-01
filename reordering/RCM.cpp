@@ -47,6 +47,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "../CSR.hpp"
 #include "BitVector.hpp"
+#include "../synk/barrier.hpp"
 
 using namespace std;
 
@@ -227,12 +228,12 @@ int bfs_serial(
 
     if (OUTPUT_VISITED) {
       memcpy(
-        visited + numOfVisited, q[numLevels%2], qTail[numLevels%2]*sizeof(int));
+        visited + numOfVisited, q[numLevels%2] + tid*A->m, qTail[numLevels%2]*sizeof(int));
     }
     numOfVisited += qTail[numLevels%2];
 
     ++numLevels;
-    if (qTail[1 - numLevels%2] == 0 || numLevels == -1) break;
+    if (qTail[1 - numLevels%2] == 0) break;
 
     int *tailPtr = q[numLevels%2] + tid*A->m;
 
@@ -308,7 +309,7 @@ int bfs(
   }
 
   while (true) {
-#pragma omp barrier
+    synk::Barrier::getInstance()->wait(tid);
 #pragma omp master
     {
       for (int t = 0; t < nthreads; ++t) {
@@ -326,9 +327,9 @@ int bfs(
       }
       if (OUTPUT_VISITED) *numOfVisited += qTailPrefixSum[nthreads];
     }
-#pragma omp barrier
+    synk::Barrier::getInstance()->wait(tid);
 
-    if (qTailPrefixSum[nthreads] == 0 || numLevels == -1) break;
+    if (qTailPrefixSum[nthreads] == 0) break;
 
     // partition based on # of nnz
     int nnzPerThread = (nnzPrefixSum[nthreads] + nthreads - 1)/nthreads;
@@ -377,7 +378,7 @@ int bfs(
         q[1 - numLevels%2] + tid*A->m,
         sizeof(int)*(qTailPrefixSum[tid + 1] - qTailPrefixSum[tid]));
     }
-#pragma omp barrier
+    synk::Barrier::getInstance()->wait(tid);
 
     int *tailPtr = q[numLevels%2] + tid*A->m;
     int *rowptr = rowptrs + tid*A->m;
