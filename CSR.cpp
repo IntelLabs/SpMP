@@ -257,6 +257,8 @@ bool CSR::isSymmetric(bool checkValues, bool printFirstNonSymmetry) const
 
 void CSR::storeMatrixMarket(const char *fileName) const
 {
+  int base = getBase();
+
   FILE *fp = fopen(fileName, "w");
   assert(fp);
 
@@ -271,12 +273,12 @@ void CSR::storeMatrixMarket(const char *fileName) const
   fprintf(fp, "%s\n", mm_typecode_to_str(matcode));
 
   // print matrix size and nonzeros.
-  fprintf(fp, "%d %d %d\n", m, n, rowptr[m]);
+  fprintf(fp, "%d %d %d\n", m, n, rowptr[m] - base);
   
   // print values
   for (int i = 0; i < m; ++i) {
-    for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
-      fprintf(fp, "%d %d %20.16g\n", i + 1, colidx[j] + 1, values[j]);
+    for (int j = rowptr[i] - base; j < rowptr[i + 1] - base; ++j) {
+      fprintf(fp, "%d %d %20.16g\n", i + 1, colidx[j] - base + 1, values[j]);
     }
   }
 
