@@ -126,6 +126,8 @@ CSR::CSR(const char *fileName, int base /*=0*/, bool forceSymmetric /*=false*/, 
 CSR::CSR(int m, int n, int *rowptr, int *colidx, double *values) :
  m(m), n(n), rowptr(rowptr), colidx(colidx), values(values), ownData_(false), idiag(NULL), diag(NULL), extptr(NULL), diagptr(NULL)
 {
+  assert(getBase() == 0 || getBase() == 1);
+
   if (m == n) {
     diagptr = MALLOC(int, m);
     int base = getBase();
