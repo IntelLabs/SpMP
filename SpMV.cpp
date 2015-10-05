@@ -110,7 +110,24 @@ void CSR::multiplyWithVector(
   double alpha, const double *x, double beta, const double *y, double gamma)
   const
 {
-  SpMV_<double>(m, w, alpha, rowptr, colidx, values, x, beta, y, gamma);
+  double *tmp_x = (double *)x;
+
+  // if x and w point to the same array, copy x to a temporary buffer
+  // in order to avoid possible race condition in SpMV_
+  if (w == x) {
+    tmp_x = MALLOC(double, m);
+ 
+    #pragma omp parallel for
+    for (int i=0; i<m; i++) {
+      tmp_x[i] = x[i];
+    }
+  }
+ 
+  SpMV_<double>(m, w, alpha, rowptr, colidx, values, tmp_x, beta, y, gamma);
+ 
+  if (w == x) {
+    FREE(tmp_x);
+  }
 }
 
 void CSR::multiplyWithVector(double *w, const double *x) const
