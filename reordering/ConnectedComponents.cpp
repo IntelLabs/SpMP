@@ -136,16 +136,13 @@ void findConnectedComponents_(
 
 #pragma omp barrier
 
-  int nnz = A->rowptr[A->m] - BASE;
-  int nnzPerThread = (nnz + nthreads - 1)/nthreads;
   int xBegin, xEnd;
   if (WITH_BIT_VECTOR) {
     xBegin = iBegin;
     xEnd = iEnd;
   }
   else {
-    xBegin = lower_bound(A->rowptr, A->rowptr + A->m, nnzPerThread*tid + BASE) - A->rowptr;
-    xEnd = lower_bound(A->rowptr, A->rowptr + A->m, nnzPerThread*(tid + 1) + BASE) - A->rowptr;
+    getLoadBalancedPartition(&xBegin, &xEnd, A->rowptr, A->m);
   }
   assert(xBegin <= xEnd);
   assert(xBegin >= 0 && xBegin <= A->m);
@@ -154,7 +151,7 @@ void findConnectedComponents_(
   for (int x = xBegin; x < xEnd; ++x) {
     int xx = WITH_BIT_VECTOR ? nodesToFind[x] : x;
     for (int j = A->rowptr[xx] - BASE; j < A->rowptr[xx + 1] - BASE; ++j) {
-      int y = A->colidx[j];
+      int y = A->colidx[j] - BASE;
       assert(!WITH_BIT_VECTOR || !bv->get(y));
       if (p[xx] != p[y]) {
         // union
