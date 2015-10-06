@@ -207,8 +207,8 @@ bfsAuxData::~bfsAuxData()
  *
  * pre-condition: levels should be initialized to -1
  */
-template<bool OUTPUT_VISITED = false>
-int bfs_serial(
+template<int BASE = 0, bool OUTPUT_VISITED = false>
+int bfs_serial_(
   const CSR *A, int source, int *levels, bfsAuxData *aux,
   int *visited = NULL) {
 
@@ -241,8 +241,8 @@ int bfs_serial(
       int u = q[1 - numLevels%2][i + tid*A->m];
       assert(levels[u] == numLevels - 1);
 
-      for (int j = A->rowptr[u]; j < A->rowptr[u + 1]; ++j) {
-        int v = A->colidx[j];
+      for (int j = A->rowptr[u] - BASE; j < A->rowptr[u + 1] - BASE; ++j) {
+        int v = A->colidx[j] - BASE;
         if (-1 == levels[v]) {
           levels[v] = numLevels;
 
@@ -258,6 +258,20 @@ int bfs_serial(
   return numLevels;
 }
 
+template<bool OUTPUT_VISITED = false>
+int bfs_serial(
+  const CSR *A, int source, int *levels, bfsAuxData *aux,
+  int *visited = NULL)
+{
+  if (0 == A->getBase()) {
+    return bfs_serial_<0, OUTPUT_VISITED>(A, source, levels, aux, visited);
+  }
+  else {
+    assert(1 == A->getBase());
+    return bfs_serial_<1, OUTPUT_VISITED>(A, source, levels, aux, visited);
+  }
+}
+
 /**
  * @return -1 if shortcircuited num of levels otherwise
  *
@@ -268,8 +282,8 @@ int bfs_serial(
  * "Fast and Efficient Graph Traversal Algorithms for CPUs: Maximizing
  * Single-Node Efficiency", Chhugani et al., IPDPS 2012
  */
-template<bool SET_LEVEL = true, bool OUTPUT_VISITED = false>
-int bfs(
+template<int BASE = 0, bool SET_LEVEL = true, bool OUTPUT_VISITED = false>
+int bfs_(
   const CSR *A, int source, int *levels, BitVector *bv,
   bfsAuxData *aux,
   int *visited = NULL, int *numOfVisited = NULL,
@@ -329,7 +343,7 @@ int bfs(
     }
     synk::Barrier::getInstance()->wait(tid);
 
-    if (qTailPrefixSum[nthreads] == 0) break;
+    if (qTailPrefixSum[nthreads] == 0 || numLevels == -1) break;
 
     // partition based on # of nnz
     int nnzPerThread = (nnzPrefixSum[nthreads] + nthreads - 1)/nthreads;
@@ -391,8 +405,8 @@ int bfs(
         int u = q[1 - numLevels%2][t*A->m + i];
         assert(!SET_LEVEL || levels[u] == numLevels - 1);
 
-        for (int j = A->rowptr[u]; j < A->rowptr[u + 1]; ++j) {
-          int v = A->colidx[j];
+        for (int j = A->rowptr[u] - BASE; j < A->rowptr[u + 1] - BASE; ++j) {
+          int v = A->colidx[j] - BASE;
           if (OUTPUT_VISITED) {
             if (bv->testAndSet(v)) {
               if (SET_LEVEL) levels[v] = numLevels;
@@ -443,6 +457,24 @@ int bfs(
 #endif
 
   return numLevels;
+}
+
+template<bool SET_LEVEL = true, bool OUTPUT_VISITED = false>
+int bfs(
+  const CSR *A, int source, int *levels, BitVector *bv,
+  bfsAuxData *aux,
+  int *visited = NULL, int *numOfVisited = NULL,
+  int *width = NULL, int *shortCircuitWidth = NULL)
+{
+  if (0 == A->getBase()) {
+    return bfs_<0, SET_LEVEL, OUTPUT_VISITED>(
+      A, source, levels, bv, aux, visited, numOfVisited, width, shortCircuitWidth);
+  }
+  else {
+    assert(1 == A->getBase());
+    return bfs_<1, SET_LEVEL, OUTPUT_VISITED>(
+      A, source, levels, bv, aux, visited, numOfVisited, width, shortCircuitWidth);
+  }
 }
 
 /**
@@ -944,9 +976,6 @@ void CSR::getBFSPermutation(int *perm, int *inversePerm)
   }
   assert(isSymmetric(false)); // check structural symmetry
 
-  int oldBase = getBase();
-  make0BasedIndexing();
-
   BitVector bv(m);
 
   bfsAuxData aux(m);
@@ -965,9 +994,6 @@ void CSR::getBFSPermutation(int *perm, int *inversePerm)
   }
   timeSecondPhase += omp_get_wtime();
   if (nNodesinFirstComp == m) {
-    if (1 == oldBase) {
-      make1BasedIndexing();
-    }
     return;
   }
 
@@ -989,6 +1015,8 @@ void CSR::getBFSPermutation(int *perm, int *inversePerm)
 
   double timeFirstPhase = -omp_get_wtime();
 
+  int base = getBase();
+
   // for each small connected component
 #pragma omp for
   for (int c = 0; c < numOfComponents; ++c) {
@@ -998,15 +1026,15 @@ void CSR::getBFSPermutation(int *perm, int *inversePerm)
     if (compSizes[c] >= PAR_THR || bv.get(i)) continue;
 
     // short circuit for a singleton or a twin
-    if (rowptr[i + 1] == rowptr[i] + 1 && colidx[rowptr[i]] == i || rowptr[i + 1] == rowptr[i]) {
+    if (rowptr[i + 1] == rowptr[i] + 1 && colidx[rowptr[i] - base] - base == i || rowptr[i + 1] == rowptr[i]) {
       inversePerm[offset] = i;
       perm[i] = offset;
       ++singletonCnt;
       continue;
     }
     else if (rowptr[i + 1] == rowptr[i] + 1) {
-      int u = colidx[rowptr[i]];
-      if (rowptr[u + 1] == rowptr[u] + 1 && colidx[rowptr[u]] == i) {
+      int u = colidx[rowptr[i] - base] - base;
+      if (rowptr[u + 1] == rowptr[u] + 1 && colidx[rowptr[u] - base] - base == i) {
         inversePerm[offset] = i;
         inversePerm[offset + 1] = u;
         perm[i] = offset;
@@ -1017,16 +1045,16 @@ void CSR::getBFSPermutation(int *perm, int *inversePerm)
     }
     else if (rowptr[i + 1] == rowptr[i] + 2) {
       int u = -1;
-      if (colidx[rowptr[i]] == i) {
-        u = colidx[rowptr[i] + 1];
+      if (colidx[rowptr[i] - base] - base == i) {
+        u = colidx[rowptr[i] + 1 - base] - base;
       }
-      else if (colidx[rowptr[i] + 1] == i) {
-        u = colidx[rowptr[i]];
+      else if (colidx[rowptr[i] + 1 - base] - base == i) {
+        u = colidx[rowptr[i] - base] - base;
       }
       if (u != -1 &&
         rowptr[u + 1] == rowptr[u] + 2 &&
-          (colidx[rowptr[u]] == u && colidx[rowptr[u] + 1] == i ||
-            colidx[rowptr[u] + 1] == u && colidx[rowptr[u]] == i)) {
+          (colidx[rowptr[u] - base] - base == u && colidx[rowptr[u] + 1 - base] - base == i ||
+            colidx[rowptr[u] + 1 - base] - base == u && colidx[rowptr[u] - base] - base == i)) {
         inversePerm[offset] = i;
         inversePerm[offset + 1] = u;
         perm[i] = offset;
@@ -1081,10 +1109,6 @@ void CSR::getBFSPermutation(int *perm, int *inversePerm)
   printf("firstPhaseTime (parallel over components) = %f\n", timeFirstPhase);
   printf("secondPhaseTime (parallel within components) = %f\n", timeSecondPhase);
 #endif
-
-  if (1 == oldBase) {
-    make1BasedIndexing();
-  }
 }
 
 } // namespace SpMP
