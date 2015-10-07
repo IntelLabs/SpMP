@@ -195,9 +195,9 @@ public :
    *  If the input matrix is not structurally symmetric, compute
    *  A+A^T and pass it to this function.
    */
-  void constructTaskGraph(const CSR& A);
+  void constructTaskGraph(CSR& A);
 
-  void constructTaskGraph(const CSR& A, const CostFunction& costFunction);
+  void constructTaskGraph(CSR& A, const CostFunction& costFunction);
 
   /**
    * constructTaskGraph version that is not dependent on CSR type

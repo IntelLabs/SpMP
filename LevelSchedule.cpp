@@ -126,15 +126,9 @@ void LevelSchedule::init_()
 #endif
 }
 
-void LevelSchedule::constructTaskGraph(const CSR& A)
+void LevelSchedule::constructTaskGraph(CSR& A)
 {
   constructTaskGraph(A, PrefixSumCostFunction(A.rowptr));
-}
-
-void LevelSchedule::constructTaskGraph(const CSR& A, const CostFunction& costFunction)
-{
-  assert(A.isSymmetric(false));
-  constructTaskGraph(A.m, A.rowptr, A.diagptr, A.extptr, A.colidx, costFunction);
 }
 
 template<int BASE = 0>
@@ -154,17 +148,35 @@ static int *constructDiagPtr_(
   return diagptr;
 }
 
+int *constructDiagPtr_(int m, const int *rowptr, const int *colidx, int base)
+{
+  if (0 == base) {
+    return constructDiagPtr_<0>(m, rowptr, colidx);
+  }
+  else {
+    assert(1 == base);
+    return constructDiagPtr_<1>(m, rowptr, colidx);
+  }
+}
+
+void constructDiagPtr(CSR& A)
+{
+  if (!A.diagptr) {
+    A.diagptr = constructDiagPtr_(A.m, A.rowptr, A.colidx, A.getBase());
+  }
+}
+
+void LevelSchedule::constructTaskGraph(CSR& A, const CostFunction& costFunction)
+{
+  constructDiagPtr(A);
+  assert(A.isSymmetric(false));
+  constructTaskGraph(A.m, A.rowptr, A.diagptr, A.extptr, A.colidx, costFunction);
+}
+
 void LevelSchedule::constructTaskGraph(
   int m, const int *rowptr, const int *colidx, const CostFunction& costFunction)
 {
-  int *diagptr;
-  if (0 == rowptr[0]) {
-    diagptr = constructDiagPtr_<0>(m, rowptr, colidx);
-  }
-  else {
-    assert(1 == rowptr[0]);
-    diagptr = constructDiagPtr_<1>(m, rowptr, colidx);
-  }
+  int *diagptr = constructDiagPtr_(m, rowptr, colidx, rowptr[0]);
 
   constructTaskGraph(m, rowptr, diagptr, NULL, colidx, costFunction);
 
