@@ -207,55 +207,78 @@ static void permuteMain_(
     iBegin += BASE;
     iEnd += BASE;
 
-    for (int i = iBegin; i < iEnd; ++i) {
-      int row = rowInversePerm ? rowInversePerm[i] + BASE : i;
-      int begin = rowptr[row], end = extptr[row];
-      int newBegin = newRowptr[i];
+    if (rowInversePerm && values && !idiag && diagptr && !SORT) {
+      // a common case
+      for (int i = iBegin; i < iEnd; ++i) {
+        int row = rowInversePerm[i] + BASE;
+        int begin = rowptr[row], end = extptr[row];
+        int newBegin = newRowptr[i];
 
-      int diagCol = -1;
-      int k = newBegin;
-      for (int j = begin; j < end; ++j, ++k) {
-        int colIdx = colidx[j];
-        int newColIdx = columnPerm[colIdx] + BASE;
+        int k = newBegin;
+        for (int j = begin; j < end; ++j, ++k) {
+          int colIdx = colidx[j];
+          int newColIdx = columnPerm[colIdx] + BASE;
 
-        newColidx[k] = newColIdx;
-        if (values) newValues[k] = values[j];
+          newColidx[k] = newColIdx;
+          newValues[k] = values[j];
 
-        if (diagptr && colidx[j] == row) {
-          diagCol = newColIdx;
-        }
-      }
-      assert(!diagptr || diagCol != -1);
-
-      if (SORT) {
-        // insertion sort
-        for (int j = newBegin + 1; j < newExtptr[i]; ++j) {
-          int c = newColidx[j];
-          double v = newValues[j];
-
-          int k = j - 1;
-          while (k >= newBegin && newColidx[k] > c) {
-            newColidx[k + 1] = newColidx[k];
-            newValues[k + 1] = newValues[k];
-            --k;
-          }
-
-          newColidx[k + 1] = c;
-          newValues[k + 1] = v;
-        }
-      }
-
-      if (idiag) newIdiag[i] = idiag[row];
-
-      if (diagptr) {
-        for (int j = newBegin; j < newExtptr[i]; ++j) {
-          if (newColidx[j] == diagCol) {
-            newDiagptr[i] = j;
-            break;
+          if (colidx[j] == row) {
+            newDiagptr[i] = k;
           }
         }
-      } // if (diagptr)
-    } // for each row
+      } // for each row
+    }
+    else {
+      for (int i = iBegin; i < iEnd; ++i) {
+        int row = rowInversePerm ? rowInversePerm[i] + BASE : i;
+        int begin = rowptr[row], end = extptr[row];
+        int newBegin = newRowptr[i];
+
+        int diagCol = -1;
+        int k = newBegin;
+        for (int j = begin; j < end; ++j, ++k) {
+          int colIdx = colidx[j];
+          int newColIdx = columnPerm[colIdx] + BASE;
+
+          newColidx[k] = newColIdx;
+          if (values) newValues[k] = values[j];
+
+          if (diagptr && colidx[j] == row) {
+            diagCol = newColIdx;
+          }
+        }
+        assert(!diagptr || diagCol != -1);
+
+        if (SORT) {
+          // insertion sort
+          for (int j = newBegin + 1; j < newExtptr[i]; ++j) {
+            int c = newColidx[j];
+            double v = newValues[j];
+
+            int k = j - 1;
+            while (k >= newBegin && newColidx[k] > c) {
+              newColidx[k + 1] = newColidx[k];
+              newValues[k + 1] = newValues[k];
+              --k;
+            }
+
+            newColidx[k + 1] = c;
+            newValues[k + 1] = v;
+          }
+        }
+
+        if (idiag) newIdiag[i] = idiag[row];
+
+        if (diagptr) {
+          for (int j = newBegin; j < newExtptr[i]; ++j) {
+            if (newColidx[j] == diagCol) {
+              newDiagptr[i] = j;
+              break;
+            }
+          }
+        } // if (diagptr)
+      } // for each row
+    }
   } // omp parallel
 }
 
