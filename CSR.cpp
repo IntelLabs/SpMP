@@ -612,15 +612,21 @@ int CSR::getBandwidth() const
   const int *colidx = this->colidx - base;
 
   int bw = INT_MIN;
-#pragma omp parallel for reduction(max:bw)
-  for (int i = base; i < m + base; ++i) {
-    for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
-      int c = colidx[j];
-      int temp = c - i;
-      if (temp < 0) temp = -temp;
-      bw = max(temp, bw);
+#pragma omp parallel reduction(max:bw)
+  {
+    int iBegin, iEnd;
+    getLoadBalancedPartition(&iBegin, &iEnd, rowptr + base, m);
+
+    for (int i = iBegin; i < iEnd; ++i) {
+      for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+        int c = colidx[j];
+        int temp = c - i;
+        if (temp < 0) temp = -temp;
+        bw = max(temp, bw);
+      }
     }
-  }
+  } // omp parallel
+
   return bw;
 }
 
@@ -641,19 +647,24 @@ double CSR::getAverageWidth(bool sorted /*= false*/) const
     }
   }
   else {
-#pragma omp parallel for reduction(+:total_width)
-    for (int i = base; i < m + base; ++i) {
-      if (rowptr[i] == rowptr[i + 1]) continue;
+#pragma omp parallel reduction(+:total_width)
+    {
+      int iBegin, iEnd;
+      getLoadBalancedPartition(&iBegin, &iEnd, rowptr + base, m);
 
-      int min_row = INT_MAX, max_row = INT_MIN;
-      for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
-        min_row = min(colidx[j], min_row);
-        max_row = max(colidx[j], max_row);
+      for (int i = iBegin; i < iEnd; ++i) {
+        if (rowptr[i] == rowptr[i + 1]) continue;
+
+        int min_row = INT_MAX, max_row = INT_MIN;
+        for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+          min_row = min(colidx[j], min_row);
+          max_row = max(colidx[j], max_row);
+        }
+
+        int width = max_row - min_row;
+        total_width += width;
       }
-
-      int width = max_row - min_row;
-      total_width += width;
-    }
+    } // omp parallel
   }
 
   return (double)total_width/m;
