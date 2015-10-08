@@ -187,7 +187,7 @@ static void permuteMain_(
   const int *diagptr = in->diagptr ? in->diagptr - BASE : NULL;
   const int *extptr = in->extptr ? in->extptr - BASE : rowptr + 1;
   const int *colidx = in->colidx - BASE;
-  const T *values = in->values - BASE;
+  const T *values = in->values ? in->values - BASE : NULL;
   const T *idiag = in->idiag ? in->idiag - BASE : NULL;
 
   int *newRowptr = out->rowptr - BASE;
@@ -207,7 +207,7 @@ static void permuteMain_(
     iBegin += BASE;
     iEnd += BASE;
 
-    if (rowInversePerm && values && !idiag && diagptr && !SORT) {
+    if (rowInversePerm && values && !idiag && !diagptr && !SORT) {
       // a common case
       for (int i = iBegin; i < iEnd; ++i) {
         int row = rowInversePerm[i] + BASE;
@@ -221,10 +221,6 @@ static void permuteMain_(
 
           newColidx[k] = newColIdx;
           newValues[k] = values[j];
-
-          if (colidx[j] == row) {
-            newDiagptr[i] = k;
-          }
         }
       } // for each row
     }

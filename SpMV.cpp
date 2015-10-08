@@ -48,7 +48,7 @@ static void SpMV_(
 
   rowptr -= base;
   colidx -= base;
-  values -= base;
+  if (values) values -= base;
 
   w -= base;
   x -= base;
@@ -68,21 +68,45 @@ static void SpMV_(
     iEnd += base;
 
     if (1 == alpha && 0 == beta && 0 == gamma) {
-      for (int i = iBegin; i < iEnd; ++i) {
-        T sum = 0;
-        for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
-          sum += values[j]*x[colidx[j]];
+      if (values) {
+        for (int i = iBegin; i < iEnd; ++i) {
+          T sum = 0;
+          for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+            sum += values[j]*x[colidx[j]];
+          }
+          w[i] = sum;
         }
-        w[i] = sum;
+      }
+      else {
+        // pattern-only matrix: assume all non-zero values are 1
+        for (int i = iBegin; i < iEnd; ++i) {
+          T sum = 0;
+          for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+            sum += x[colidx[j]];
+          }
+          w[i] = sum;
+        }
       }
     }
     else {
-      for (int i = iBegin; i < iEnd; ++i) {
-        T sum = 0;
-        for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
-          sum += values[j]*x[colidx[j]];
+      if (values) {
+        for (int i = iBegin; i < iEnd; ++i) {
+          T sum = 0;
+          for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+            sum += values[j]*x[colidx[j]];
+          }
+          w[i] = alpha*sum + beta*y[i] + gamma;
         }
-        w[i] = alpha*sum + beta*y[i] + gamma;
+      }
+      else {
+        // pattern-only matrix: assume all non-zero values are 1
+        for (int i = iBegin; i < iEnd; ++i) {
+          T sum = 0;
+          for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+            sum += x[colidx[j]];
+          }
+          w[i] = alpha*sum + beta*y[i] + gamma;
+        }
       }
     }
 #ifdef MEASURE_LOAD_BALANCE
