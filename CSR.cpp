@@ -123,14 +123,10 @@ CSR::CSR(const char *fileName, int base /*=0*/, bool forceSymmetric /*=false*/, 
   }
 }
 
-extern void constructDiagPtr(CSR& A);
-
 CSR::CSR(int m, int n, int *rowptr, int *colidx, double *values) :
  m(m), n(n), rowptr(rowptr), colidx(colidx), values(values), ownData_(false), idiag(NULL), diag(NULL), extptr(NULL), diagptr(NULL)
 {
   assert(getBase() == 0 || getBase() == 1);
-
-  constructDiagPtr(*this);
 }
 
 void CSR::dealloc()
@@ -416,7 +412,7 @@ void CSR::make1BasedIndexing()
 void CSR::computeInverseDiag()
 {
   if (!idiag) {
-    constructDiagPtr(*this);
+    constructDiagPtr();
 
     int base = getBase();
     const double *values = this->values - base;
@@ -616,6 +612,8 @@ int CSR::getBandwidth() const
   {
     int iBegin, iEnd;
     getLoadBalancedPartition(&iBegin, &iEnd, rowptr + base, m);
+    iBegin += base;
+    iEnd += base;
 
     for (int i = iBegin; i < iEnd; ++i) {
       for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
@@ -651,6 +649,8 @@ double CSR::getAverageWidth(bool sorted /*= false*/) const
     {
       int iBegin, iEnd;
       getLoadBalancedPartition(&iBegin, &iEnd, rowptr + base, m);
+      iBegin += base;
+      iEnd += base;
 
       for (int i = iBegin; i < iEnd; ++i) {
         if (rowptr[i] == rowptr[i + 1]) continue;

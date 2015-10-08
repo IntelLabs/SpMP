@@ -159,16 +159,16 @@ int *constructDiagPtr_(int m, const int *rowptr, const int *colidx, int base)
   }
 }
 
-void constructDiagPtr(CSR& A)
+void CSR::constructDiagPtr()
 {
-  if (!A.diagptr) {
-    A.diagptr = constructDiagPtr_(A.m, A.rowptr, A.colidx, A.getBase());
+  if (!diagptr) {
+    diagptr = constructDiagPtr_(m, rowptr, colidx, getBase());
   }
 }
 
 void LevelSchedule::constructTaskGraph(CSR& A, const CostFunction& costFunction)
 {
-  constructDiagPtr(A);
+  A.constructDiagPtr();
   assert(A.isSymmetric(false));
   constructTaskGraph(A.m, A.rowptr, A.diagptr, A.extptr, A.colidx, costFunction);
 }

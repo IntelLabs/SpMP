@@ -156,6 +156,12 @@ public:
    */
   void computeInverseDiag();
 
+  /**
+   * Need to do this before permutation.
+   * constructDiagPtr after permutation won't be correct
+   */
+  void constructDiagPtr();
+
   void alloc(int m, int nnz, bool createSeparateDiagData = true);
   void dealloc();
 
