@@ -161,7 +161,7 @@ MAP_PRIVATE | MAP_ANONYMOUS |
 MAP_POPULATE | MAP_HUGETLB, -1, 0);
 if (ptr == MAP_FAILED) {
 // The mmap() call failed. Try to malloc instead
-ptr = (char *)malloc(real_size);
+posix_memalign((void **)&ptr, 4096, real_size);
 if (ptr == NULL) return NULL;
 real_size = 0;
 }
