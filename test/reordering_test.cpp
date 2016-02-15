@@ -86,7 +86,8 @@ int main(int argc, char **argv)
   CSR *A = new CSR(argv[1], 0, true /* force-symmetric */);
   int nnz = A->getNnz();
   double flops = 2*nnz;
-  double bytes = (sizeof(double) + sizeof(int))*nnz + sizeof(double)*(A->m + A->n);
+  double bytes = (double)(sizeof(double) + sizeof(int))*nnz + sizeof(double)*(A->m + A->n);
+  printf("m = %d nnz = %d %f bytes = %f\n", A->m, nnz, (double)nnz/A->m, bytes);
 
   printf("original bandwidth %d\n", A->getBandwidth());
 
@@ -100,7 +101,7 @@ int main(int argc, char **argv)
   double times[REPEAT];
 
   for (int i = 0; i < REPEAT; ++i) {
-    flushLlc();
+    for (int j = 0; j < 16; ++j) flushLlc();
 
     double t = omp_get_wtime();
     A->multiplyWithVector(y, x);
@@ -113,7 +114,7 @@ int main(int argc, char **argv)
 
 #ifdef MKL
   for (int i = 0; i < REPEAT; ++i) {
-    flushLlc();
+    for (int j = 0; j < 16; ++j) flushLlc();
 
     double t = omp_get_wtime();
     mkl_cspblas_dcsrgemv(
@@ -175,7 +176,7 @@ int main(int argc, char **argv)
     printf("Permuted bandwidth %d\n", APerm->getBandwidth());
 
     for (int i = 0; i < REPEAT; ++i) {
-      flushLlc();
+      for (int j = 0; j < 16; ++j) flushLlc();
 
       t = omp_get_wtime();
       APerm->multiplyWithVector(y, x);
