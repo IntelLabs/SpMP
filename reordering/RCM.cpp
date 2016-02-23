@@ -675,7 +675,7 @@ void CSR::getRCMPermutation(int *perm, int *inversePerm, bool pseudoDiameterSour
   double sourceSelectionTime2 = 0, bfsTime2 = 0, prefixTime2 = 0, placeTime2 = 0;
 
   int *levels = new int[m];
-  int maxDegree = INT_MIN;
+  int maxDegree = 0;
 #pragma omp parallel for reduction(max:maxDegree)
   for (int i = 0; i < m; ++i) {
     maxDegree = max(maxDegree, rowptr[i + 1] - rowptr[i]);
