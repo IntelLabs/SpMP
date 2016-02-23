@@ -71,24 +71,27 @@ Barrier *Barrier::getInstance()
 {
     if (!instance)
     {
-        int threadsPerCore =
+        int nthreads = omp_in_parallel() ? omp_get_num_threads() : omp_get_max_threads();
+
 #ifdef __MIC__
-            4;
+        int threadsPerCore = nthreads%4 == 0 ? 4 : (nthreads%2 == 0 ? 2 : 1);
+          // Assume compact or balanced affinity.
+          // Otherwise, using numThreadsPerCore=1 by explicitly calling initializeInstance is recommended
 #else
-            1;
+        int threadsPerCore = 1;
 #endif
 
         if (omp_in_parallel())
         {
 #pragma omp barrier
 #pragma omp master
-            instance = new Barrier(omp_get_num_threads()/threadsPerCore, threadsPerCore);
+            instance = new Barrier(nthreads/threadsPerCore, threadsPerCore);
 #pragma omp barrier
             instance->init(omp_get_thread_num());
         }
         else
         {
-            instance = new Barrier(omp_get_max_threads()/threadsPerCore, threadsPerCore);
+            instance = new Barrier(nthreads/threadsPerCore, threadsPerCore);
 #pragma omp parallel
             {
                 instance->init(omp_get_thread_num());
