@@ -84,6 +84,10 @@ public :
   
   static MemoryPool *getSingleton();
 
+#ifdef HBW_ALLOC
+  static MemoryPool *getMemkindSingleton();
+#endif
+
 private :
   size_t size_;
   size_t head_, tail_;
