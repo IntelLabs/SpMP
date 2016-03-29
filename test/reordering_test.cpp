@@ -63,7 +63,9 @@ SpMV BW   41.32 gbps
  */
  
 #include <omp.h>
+#ifdef MKL
 #include <mkl.h>
+#endif
 
 #include "../Utils.hpp"
 
