@@ -25,10 +25,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "MemoryPool.hpp"
 #include "Utils.hpp"
 
+#ifdef HBW_ALLOC
+#include <hbwmalloc.h>
+#endif
+
 namespace SpMP
 {
 
 static MemoryPool singleton;
+#ifdef HBW_ALLOC
+static MemoryPool memkindSingleton;
+#endif
 
 MemoryPool::MemoryPool() : size_(0), head_(0), tail_(0), buffer_(NULL)
 {
@@ -49,13 +56,33 @@ void MemoryPool::initialize(size_t sz)
   size_ = sz;
   head_ = 0;
   tail_ = 0;
-  buffer_ = (char *)malloc_huge_pages(sz);
+#ifdef HBW_ALLOC
+  if (this == &memkindSingleton)
+  {
+    hbw_posix_memalign((void **)&buffer_, 4096, sz);
+  }
+  else
+#endif
+  {
+    buffer_ = (char *)malloc_huge_pages(sz);
+  }
   assert(buffer_);
 }
 
 void MemoryPool::finalize()
 {
-  if (buffer_) free_huge_pages(buffer_);
+  if (buffer_) {
+#ifdef HBW_ALLOC
+    if (this == &memkindSingleton)
+    {
+      hbw_free(buffer_);
+    }
+    else
+#endif
+    {
+      free_huge_pages(buffer_);
+    }
+  }
   buffer_ = NULL;
   head_ = 0;
   tail_ = 0;
@@ -161,5 +188,12 @@ MemoryPool *MemoryPool::getSingleton()
 {
   return &singleton;
 }
+
+#ifdef HBW_ALLOC
+MemoryPool *MemoryPool::getMemkindSingleton()
+{
+  return &memkindSingleton;
+}
+#endif
 
 } // namespace SpMP
