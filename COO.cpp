@@ -27,6 +27,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "COO.hpp"
 #include "mm_io.h"
+#include "Utils.hpp"
 
 using namespace std;
 
