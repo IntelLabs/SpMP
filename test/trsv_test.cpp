@@ -473,17 +473,51 @@ int main(int argc, char **argv)
   // Construct schedules
   /////////////////////////////////////////////////////////////////////////////
 
+  int *symRowPtr = NULL, *symColIdx = NULL, *symDiagPtr = NULL, *symExtPtr = NULL;
+  bool wasSymmetric = getSymmetricNnzPattern(A, &symRowPtr, &symDiagPtr, &symExtPtr, &symColIdx);
+
   LevelSchedule *barrierSchedule = new LevelSchedule;
   barrierSchedule->useBarrier = true;
   barrierSchedule->transitiveReduction = false;
-  barrierSchedule->constructTaskGraph(*A);
+  if (wasSymmetric) {
+    FREE(symRowPtr);
+    FREE(symColIdx);
+    FREE(symDiagPtr);
+    FREE(symExtPtr);
+
+    barrierSchedule->constructTaskGraph(*A);
+  }
+  else {
+    barrierSchedule->constructTaskGraph(
+      A->m, symRowPtr, symDiagPtr, symExtPtr, symColIdx,
+      PrefixSumCostFunction(symRowPtr));
+  }
 
   LevelSchedule *p2pSchedule = new LevelSchedule;
   p2pSchedule->transitiveReduction = false;
-  p2pSchedule->constructTaskGraph(*A);
+  if (wasSymmetric) {
+    p2pSchedule->constructTaskGraph(*A);
+  }
+  else {
+    p2pSchedule->constructTaskGraph(
+      A->m, symRowPtr, symDiagPtr, symExtPtr, symColIdx,
+      PrefixSumCostFunction(symRowPtr));
+  }
 
   LevelSchedule *p2pScheduleWithTransitiveReduction = new LevelSchedule;
-  p2pScheduleWithTransitiveReduction->constructTaskGraph(*A);
+  if (wasSymmetric) {
+    p2pScheduleWithTransitiveReduction->constructTaskGraph(*A);
+  }
+  else {
+    p2pScheduleWithTransitiveReduction->constructTaskGraph(
+      A->m, symRowPtr, symDiagPtr, symExtPtr, symColIdx,
+      PrefixSumCostFunction(symRowPtr));
+
+    FREE(symRowPtr);
+    FREE(symColIdx);
+    FREE(symDiagPtr);
+    FREE(symExtPtr);
+  }
 
   printf("parallelism %f\n", (double)A->m/(barrierSchedule->levIndices.size() - 1));
   assert(barrierSchedule->levIndices.size() == p2pSchedule->levIndices.size());
