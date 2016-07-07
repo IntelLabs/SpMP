@@ -1,0 +1,495 @@
+OMP_NUM_THREADS=11
+input=/scratch/jpark103/matrices/nlpkkt160.mtx
+parallelism 4172800.000000
+fwd_ref			   1.26 gflops    7.72 gbps
+bwd_ref			   1.22 gflops    7.49 gbps
+fwd_barrier		   4.13 gflops   25.38 gbps
+bwd_barrier		   4.40 gflops   27.03 gbps
+fwd_p2p			   4.14 gflops   25.41 gbps
+bwd_p2p			   4.40 gflops   27.05 gbps
+fwd_p2p_tr_red		   4.14 gflops   25.41 gbps
+bwd_p2p_tr_red		   4.41 gflops   27.05 gbps
+fwd_barrier_perm	   4.27 gflops   26.20 gbps
+bwd_barrier_perm	   4.49 gflops   27.59 gbps
+fwd_p2p_perm		   4.27 gflops   26.21 gbps
+bwd_p2p_perm		   4.49 gflops   27.60 gbps
+fwd_p2p_tr_red_perm	   4.27 gflops   26.21 gbps
+bwd_p2p_tr_red_perm	   4.49 gflops   27.59 gbps
+OMP_NUM_THREADS=22
+input=/scratch/jpark103/matrices/nlpkkt160.mtx
+parallelism 4172800.000000
+fwd_ref			   0.90 gflops    5.51 gbps
+bwd_ref			   1.21 gflops    7.41 gbps
+fwd_barrier		   3.27 gflops   20.11 gbps
+bwd_barrier		   3.83 gflops   23.54 gbps
+fwd_p2p			   3.38 gflops   20.74 gbps
+bwd_p2p			   4.00 gflops   24.55 gbps
+fwd_p2p_tr_red		   6.75 gflops   41.46 gbps
+bwd_p2p_tr_red		   6.71 gflops   41.19 gbps
+fwd_barrier_perm	   7.82 gflops   47.99 gbps
+bwd_barrier_perm	   8.18 gflops   50.22 gbps
+fwd_p2p_perm		   7.80 gflops   47.91 gbps
+bwd_p2p_perm		   8.18 gflops   50.25 gbps
+fwd_p2p_tr_red_perm	   7.77 gflops   47.70 gbps
+bwd_p2p_tr_red_perm	   8.18 gflops   50.25 gbps
+OMP_NUM_THREADS=44
+input=/scratch/jpark103/matrices/nlpkkt160.mtx
+parallelism 4172800.000000
+fwd_ref			   0.76 gflops    4.68 gbps
+bwd_ref			   0.96 gflops    5.88 gbps
+fwd_barrier		   4.34 gflops   26.63 gbps
+bwd_barrier		   4.64 gflops   28.51 gbps
+fwd_p2p			  14.73 gflops   90.47 gbps
+bwd_p2p			  14.76 gflops   90.64 gbps
+fwd_p2p_tr_red		  13.58 gflops   83.40 gbps
+bwd_p2p_tr_red		  15.84 gflops   97.25 gbps
+fwd_barrier_perm	  14.42 gflops   88.52 gbps
+bwd_barrier_perm	  15.64 gflops   96.03 gbps
+fwd_p2p_perm		  14.64 gflops   89.91 gbps
+bwd_p2p_perm		  15.74 gflops   96.63 gbps
+fwd_p2p_tr_red_perm	  14.69 gflops   90.22 gbps
+bwd_p2p_tr_red_perm	  15.79 gflops   96.94 gbps
+OMP_NUM_THREADS=11
+OMP_NUM_THREADS=22
+OMP_NUM_THREADS=44
+OMP_NUM_THREADS=11
+OMP_NUM_THREADS=22
+OMP_NUM_THREADS=44
+OMP_NUM_THREADS=11
+input=/scratch/jpark103/matrices/webbase-1M.mtx
+parallelism 1466.282991
+fwd_ref			   0.50 gflops    3.47 gbps
+bwd_ref			   0.75 gflops    5.24 gbps
+fwd_barrier		   0.94 gflops    6.58 gbps
+bwd_barrier		   1.77 gflops   12.37 gbps
+fwd_p2p			   1.12 gflops    7.81 gbps
+bwd_p2p			   2.13 gflops   14.87 gbps
+fwd_p2p_tr_red		   1.13 gflops    7.86 gbps
+bwd_p2p_tr_red		   2.19 gflops   15.30 gbps
+fwd_barrier_perm	   1.60 gflops   11.18 gbps
+bwd_barrier_perm	   2.43 gflops   16.95 gbps
+fwd_p2p_perm		   1.91 gflops   13.34 gbps
+bwd_p2p_perm		   3.02 gflops   21.05 gbps
+fwd_p2p_tr_red_perm	   1.94 gflops   13.53 gbps
+bwd_p2p_tr_red_perm	   3.20 gflops   22.29 gbps
+OMP_NUM_THREADS=22
+input=/scratch/jpark103/matrices/webbase-1M.mtx
+parallelism 1466.282991
+fwd_ref			   0.48 gflops    3.37 gbps
+bwd_ref			   0.72 gflops    5.00 gbps
+fwd_barrier		   0.89 gflops    6.19 gbps
+bwd_barrier		   1.57 gflops   10.96 gbps
+fwd_p2p			   1.38 gflops    9.64 gbps
+bwd_p2p			   2.38 gflops   16.63 gbps
+fwd_p2p_tr_red		   1.40 gflops    9.78 gbps
+bwd_p2p_tr_red		   2.47 gflops   17.21 gbps
+fwd_barrier_perm	   1.80 gflops   12.54 gbps
+bwd_barrier_perm	   2.40 gflops   16.72 gbps
+fwd_p2p_perm		   2.72 gflops   18.99 gbps
+bwd_p2p_perm		   3.65 gflops   25.45 gbps
+fwd_p2p_tr_red_perm	   2.78 gflops   19.37 gbps
+bwd_p2p_tr_red_perm	   3.97 gflops   27.67 gbps
+OMP_NUM_THREADS=44
+input=/scratch/jpark103/matrices/webbase-1M.mtx
+parallelism 1466.282991
+fwd_ref			   0.48 gflops    3.36 gbps
+bwd_ref			   0.73 gflops    5.11 gbps
+fwd_barrier		   1.42 gflops    9.88 gbps
+bwd_barrier		   1.73 gflops   12.08 gbps
+fwd_p2p			   2.30 gflops   16.07 gbps
+bwd_p2p			   3.20 gflops   22.32 gbps
+fwd_p2p_tr_red		   2.38 gflops   16.57 gbps
+bwd_p2p_tr_red		   3.38 gflops   23.55 gbps
+fwd_barrier_perm	   2.21 gflops   15.39 gbps
+bwd_barrier_perm	   2.37 gflops   16.55 gbps
+Error at 249567 expected 0 actual 1.30967e-10
+fwd_p2p_perm		   4.91 gflops   34.24 gbps
+bwd_p2p_perm		   5.13 gflops   35.79 gbps
+Error at 249567 expected 0 actual 1.30967e-10
+fwd_p2p_tr_red_perm	   5.21 gflops   36.33 gbps
+bwd_p2p_tr_red_perm	   5.88 gflops   41.02 gbps
+Error at 249567 expected 0 actual 1.30967e-10
+OMP_NUM_THREADS=11
+input=/scratch/jpark103/matrices/wiki-Talk.mtx
+parallelism 2394385.000000
+fwd_ref			   0.68 gflops    4.98 gbps
+bwd_ref			   0.24 gflops    1.75 gbps
+fwd_barrier		   0.81 gflops    5.91 gbps
+bwd_barrier		   0.47 gflops    3.41 gbps
+Error at 0 expected 0 actual -2.39438e+06
+fwd_p2p			   1.05 gflops    7.66 gbps
+bwd_p2p			   0.47 gflops    3.41 gbps
+Error at 0 expected 0 actual -2.39438e+06
+fwd_p2p_tr_red		   1.05 gflops    7.66 gbps
+bwd_p2p_tr_red		   0.47 gflops    3.41 gbps
+Error at 0 expected 0 actual -2.39438e+06
+fwd_barrier_perm	   1.27 gflops    9.28 gbps
+bwd_barrier_perm	   0.61 gflops    4.41 gbps
+Error at 0 expected 0 actual 1.30603e+06
+fwd_p2p_perm		   1.16 gflops    8.43 gbps
+bwd_p2p_perm		   0.46 gflops    3.33 gbps
+Error at 0 expected 0 actual -1.95904e+06
+fwd_p2p_tr_red_perm	   1.16 gflops    8.43 gbps
+bwd_p2p_tr_red_perm	   0.46 gflops    3.33 gbps
+Error at 0 expected 0 actual -1.30603e+06
+OMP_NUM_THREADS=22
+input=/scratch/jpark103/matrices/wiki-Talk.mtx
+parallelism 2394385.000000
+fwd_ref			   0.67 gflops    4.88 gbps
+bwd_ref			   0.23 gflops    1.71 gbps
+fwd_barrier		   0.81 gflops    5.93 gbps
+bwd_barrier		   0.47 gflops    3.41 gbps
+Error at 0 expected 0 actual -2.39438e+06
+fwd_p2p			   1.05 gflops    7.68 gbps
+bwd_p2p			   0.47 gflops    3.42 gbps
+Error at 0 expected 0 actual -2.39438e+06
+fwd_p2p_tr_red		   1.05 gflops    7.68 gbps
+bwd_p2p_tr_red		   0.47 gflops    3.42 gbps
+Error at 0 expected 0 actual -2.39438e+06
+fwd_barrier_perm	   1.13 gflops    8.21 gbps
+bwd_barrier_perm	   0.60 gflops    4.40 gbps
+Error at 0 expected 0 actual 979518
+fwd_p2p_perm		   0.96 gflops    6.98 gbps
+bwd_p2p_perm		   0.45 gflops    3.31 gbps
+Error at 0 expected 0 actual -435341
+fwd_p2p_tr_red_perm	   0.96 gflops    6.98 gbps
+bwd_p2p_tr_red_perm	   0.45 gflops    3.31 gbps
+Error at 0 expected 0 actual -108836
+OMP_NUM_THREADS=44
+input=/scratch/jpark103/matrices/wiki-Talk.mtx
+parallelism 2394385.000000
+fwd_ref			   0.63 gflops    4.58 gbps
+bwd_ref			   0.22 gflops    1.59 gbps
+fwd_barrier		   0.81 gflops    5.90 gbps
+bwd_barrier		   0.47 gflops    3.40 gbps
+Error at 0 expected 0 actual -2.39438e+06
+fwd_p2p			   1.05 gflops    7.65 gbps
+bwd_p2p			   0.47 gflops    3.40 gbps
+Error at 0 expected 0 actual -2.39438e+06
+fwd_p2p_tr_red		   1.05 gflops    7.65 gbps
+bwd_p2p_tr_red		   0.47 gflops    3.40 gbps
+Error at 0 expected 0 actual -2.39438e+06
+fwd_barrier_perm	   0.98 gflops    7.11 gbps
+bwd_barrier_perm	   0.59 gflops    4.30 gbps
+Error at 0 expected 0 actual 1.68695e+06
+fwd_p2p_perm		   0.84 gflops    6.10 gbps
+bwd_p2p_perm		   0.45 gflops    3.27 gbps
+Error at 0 expected 0 actual -1.41486e+06
+fwd_p2p_tr_red_perm	   0.84 gflops    6.13 gbps
+bwd_p2p_tr_red_perm	   0.45 gflops    3.27 gbps
+Error at 0 expected 0 actual -435338
+OMP_NUM_THREADS=11
+input=/scratch/jpark103/matrices/chipcool0.mtx
+parallelism 37.606742
+fwd_ref			   0.67 gflops    4.22 gbps
+bwd_ref			   0.62 gflops    3.90 gbps
+fwd_barrier		   0.44 gflops    2.76 gbps
+bwd_barrier		   0.45 gflops    2.80 gbps
+fwd_p2p			   0.78 gflops    4.91 gbps
+bwd_p2p			   0.77 gflops    4.82 gbps
+fwd_p2p_tr_red		   0.81 gflops    5.09 gbps
+bwd_p2p_tr_red		   0.80 gflops    5.01 gbps
+fwd_barrier_perm	   0.62 gflops    3.86 gbps
+bwd_barrier_perm	   0.63 gflops    3.93 gbps
+fwd_p2p_perm		   1.28 gflops    8.03 gbps
+bwd_p2p_perm		   1.25 gflops    7.83 gbps
+fwd_p2p_tr_red_perm	   1.48 gflops    9.25 gbps
+bwd_p2p_tr_red_perm	   1.42 gflops    8.91 gbps
+OMP_NUM_THREADS=22
+input=/scratch/jpark103/matrices/chipcool0.mtx
+parallelism 37.606742
+fwd_ref			   0.67 gflops    4.21 gbps
+bwd_ref			   0.62 gflops    3.88 gbps
+fwd_barrier		   0.25 gflops    1.59 gbps
+bwd_barrier		   0.26 gflops    1.61 gbps
+fwd_p2p			   0.54 gflops    3.39 gbps
+bwd_p2p			   0.53 gflops    3.35 gbps
+fwd_p2p_tr_red		   0.57 gflops    3.59 gbps
+bwd_p2p_tr_red		   0.57 gflops    3.58 gbps
+fwd_barrier_perm	   0.32 gflops    2.03 gbps
+bwd_barrier_perm	   0.32 gflops    2.01 gbps
+fwd_p2p_perm		   0.76 gflops    4.74 gbps
+bwd_p2p_perm		   0.75 gflops    4.68 gbps
+fwd_p2p_tr_red_perm	   0.89 gflops    5.55 gbps
+bwd_p2p_tr_red_perm	   0.87 gflops    5.42 gbps
+OMP_NUM_THREADS=44
+input=/scratch/jpark103/matrices/chipcool0.mtx
+parallelism 37.606742
+fwd_ref			   0.69 gflops    4.30 gbps
+bwd_ref			   0.63 gflops    3.95 gbps
+fwd_barrier		   0.22 gflops    1.36 gbps
+bwd_barrier		   0.22 gflops    1.40 gbps
+fwd_p2p			   0.43 gflops    2.71 gbps
+bwd_p2p			   0.44 gflops    2.76 gbps
+fwd_p2p_tr_red		   0.42 gflops    2.62 gbps
+bwd_p2p_tr_red		   0.42 gflops    2.66 gbps
+fwd_barrier_perm	   0.26 gflops    1.63 gbps
+bwd_barrier_perm	   0.26 gflops    1.64 gbps
+fwd_p2p_perm		   0.62 gflops    3.88 gbps
+bwd_p2p_perm		   0.60 gflops    3.73 gbps
+fwd_p2p_tr_red_perm	   0.75 gflops    4.67 gbps
+bwd_p2p_tr_red_perm	   0.72 gflops    4.53 gbps
+OMP_NUM_THREADS=11
+input=/scratch/jpark103/matrices/dense2.mtx
+parallelism 1.000000
+fwd_ref			   1.67 gflops   10.03 gbps
+bwd_ref			   1.42 gflops    8.49 gbps
+fwd_barrier		   1.15 gflops    6.93 gbps
+bwd_barrier		   1.04 gflops    6.25 gbps
+fwd_p2p			   1.64 gflops    9.84 gbps
+bwd_p2p			   1.39 gflops    8.33 gbps
+fwd_p2p_tr_red		   1.64 gflops    9.83 gbps
+bwd_p2p_tr_red		   1.39 gflops    8.33 gbps
+fwd_barrier_perm	   1.17 gflops    7.05 gbps
+bwd_barrier_perm	   1.05 gflops    6.30 gbps
+fwd_p2p_perm		   1.66 gflops    9.97 gbps
+bwd_p2p_perm		   1.40 gflops    8.43 gbps
+fwd_p2p_tr_red_perm	   1.66 gflops    9.95 gbps
+bwd_p2p_tr_red_perm	   1.40 gflops    8.41 gbps
+OMP_NUM_THREADS=22
+input=/scratch/jpark103/matrices/dense2.mtx
+parallelism 1.000000
+fwd_ref			   1.13 gflops    6.80 gbps
+bwd_ref			   1.15 gflops    6.91 gbps
+fwd_barrier		   0.84 gflops    5.04 gbps
+bwd_barrier		   0.77 gflops    4.64 gbps
+fwd_p2p			   1.67 gflops   10.00 gbps
+bwd_p2p			   1.38 gflops    8.25 gbps
+fwd_p2p_tr_red		   1.67 gflops   10.02 gbps
+bwd_p2p_tr_red		   1.38 gflops    8.27 gbps
+fwd_barrier_perm	   0.90 gflops    5.41 gbps
+bwd_barrier_perm	   0.78 gflops    4.70 gbps
+fwd_p2p_perm		   1.58 gflops    9.49 gbps
+bwd_p2p_perm		   1.22 gflops    7.30 gbps
+fwd_p2p_tr_red_perm	   1.58 gflops    9.47 gbps
+bwd_p2p_tr_red_perm	   1.21 gflops    7.28 gbps
+OMP_NUM_THREADS=44
+input=/scratch/jpark103/matrices/dense2.mtx
+parallelism 1.000000
+fwd_ref			   0.95 gflops    5.71 gbps
+bwd_ref			   1.13 gflops    6.77 gbps
+fwd_barrier		   0.59 gflops    3.56 gbps
+bwd_barrier		   0.67 gflops    4.00 gbps
+fwd_p2p			   1.64 gflops    9.82 gbps
+bwd_p2p			   1.37 gflops    8.22 gbps
+fwd_p2p_tr_red		   1.63 gflops    9.81 gbps
+bwd_p2p_tr_red		   1.37 gflops    8.20 gbps
+fwd_barrier_perm	   0.76 gflops    4.58 gbps
+bwd_barrier_perm	   0.72 gflops    4.30 gbps
+fwd_p2p_perm		   1.61 gflops    9.65 gbps
+bwd_p2p_perm		   1.39 gflops    8.34 gbps
+fwd_p2p_tr_red_perm	   1.61 gflops    9.64 gbps
+bwd_p2p_tr_red_perm	   1.39 gflops    8.31 gbps
+OMP_NUM_THREADS=11
+input=/scratch/jpark103/matrices/cant.mtx
+parallelism 26.053817
+fwd_ref			   1.11 gflops    6.75 gbps
+bwd_ref			   1.06 gflops    6.40 gbps
+fwd_barrier		   1.38 gflops    8.36 gbps
+bwd_barrier		   1.23 gflops    7.45 gbps
+fwd_p2p			   2.04 gflops   12.35 gbps
+bwd_p2p			   1.78 gflops   10.77 gbps
+fwd_p2p_tr_red		   2.17 gflops   13.14 gbps
+bwd_p2p_tr_red		   1.88 gflops   11.40 gbps
+fwd_barrier_perm	   1.70 gflops   10.33 gbps
+bwd_barrier_perm	   1.71 gflops   10.35 gbps
+fwd_p2p_perm		   2.93 gflops   17.78 gbps
+bwd_p2p_perm		   2.88 gflops   17.48 gbps
+fwd_p2p_tr_red_perm	   3.23 gflops   19.56 gbps
+bwd_p2p_tr_red_perm	   3.17 gflops   19.23 gbps
+OMP_NUM_THREADS=22
+input=/scratch/jpark103/matrices/cant.mtx
+parallelism 26.053817
+fwd_ref			   0.91 gflops    5.54 gbps
+bwd_ref			   0.87 gflops    5.28 gbps
+fwd_barrier		   0.81 gflops    4.92 gbps
+bwd_barrier		   0.79 gflops    4.81 gbps
+fwd_p2p			   1.31 gflops    7.94 gbps
+bwd_p2p			   1.31 gflops    7.94 gbps
+fwd_p2p_tr_red		   1.51 gflops    9.17 gbps
+bwd_p2p_tr_red		   1.47 gflops    8.88 gbps
+fwd_barrier_perm	   0.92 gflops    5.55 gbps
+bwd_barrier_perm	   0.92 gflops    5.57 gbps
+fwd_p2p_perm		   1.49 gflops    9.02 gbps
+bwd_p2p_perm		   1.52 gflops    9.24 gbps
+fwd_p2p_tr_red_perm	   1.72 gflops   10.40 gbps
+bwd_p2p_tr_red_perm	   1.73 gflops   10.47 gbps
+OMP_NUM_THREADS=44
+input=/scratch/jpark103/matrices/cant.mtx
+parallelism 26.053817
+fwd_ref			   0.96 gflops    5.84 gbps
+bwd_ref			   0.94 gflops    5.71 gbps
+fwd_barrier		   0.68 gflops    4.09 gbps
+bwd_barrier		   0.68 gflops    4.10 gbps
+fwd_p2p			   1.02 gflops    6.17 gbps
+bwd_p2p			   1.04 gflops    6.29 gbps
+fwd_p2p_tr_red		   1.25 gflops    7.58 gbps
+bwd_p2p_tr_red		   1.25 gflops    7.61 gbps
+fwd_barrier_perm	   0.66 gflops    3.99 gbps
+bwd_barrier_perm	   0.66 gflops    3.98 gbps
+fwd_p2p_perm		   1.10 gflops    6.69 gbps
+bwd_p2p_perm		   1.08 gflops    6.55 gbps
+fwd_p2p_tr_red_perm	   1.40 gflops    8.48 gbps
+bwd_p2p_tr_red_perm	   1.35 gflops    8.20 gbps
+OMP_NUM_THREADS=11
+input=/scratch/jpark103/matrices/crankseg_1.mtx
+parallelism 13.018738
+fwd_ref			   1.44 gflops    8.68 gbps
+bwd_ref			   0.93 gflops    5.57 gbps
+fwd_barrier		   2.22 gflops   13.36 gbps
+bwd_barrier		   1.90 gflops   11.45 gbps
+fwd_p2p			   3.14 gflops   18.88 gbps
+bwd_p2p			   2.38 gflops   14.34 gbps
+fwd_p2p_tr_red		   4.22 gflops   25.43 gbps
+bwd_p2p_tr_red		   3.31 gflops   19.93 gbps
+fwd_barrier_perm	   2.46 gflops   14.83 gbps
+bwd_barrier_perm	   1.99 gflops   12.00 gbps
+fwd_p2p_perm		   3.49 gflops   21.03 gbps
+bwd_p2p_perm		   2.50 gflops   15.03 gbps
+fwd_p2p_tr_red_perm	   4.72 gflops   28.43 gbps
+bwd_p2p_tr_red_perm	   3.58 gflops   21.56 gbps
+OMP_NUM_THREADS=22
+input=/scratch/jpark103/matrices/crankseg_1.mtx
+parallelism 13.018738
+fwd_ref			   1.17 gflops    7.05 gbps
+bwd_ref			   0.79 gflops    4.75 gbps
+fwd_barrier		   1.49 gflops    8.94 gbps
+bwd_barrier		   1.39 gflops    8.37 gbps
+fwd_p2p			   3.01 gflops   18.14 gbps
+bwd_p2p			   2.28 gflops   13.70 gbps
+fwd_p2p_tr_red		   4.37 gflops   26.31 gbps
+bwd_p2p_tr_red		   3.48 gflops   20.97 gbps
+fwd_barrier_perm	   1.58 gflops    9.53 gbps
+bwd_barrier_perm	   1.45 gflops    8.72 gbps
+fwd_p2p_perm		   3.76 gflops   22.64 gbps
+bwd_p2p_perm		   2.63 gflops   15.80 gbps
+fwd_p2p_tr_red_perm	   5.91 gflops   35.56 gbps
+bwd_p2p_tr_red_perm	   4.12 gflops   24.83 gbps
+OMP_NUM_THREADS=44
+input=/scratch/jpark103/matrices/crankseg_1.mtx
+parallelism 13.018738
+fwd_ref			   1.44 gflops    8.66 gbps
+bwd_ref			   0.92 gflops    5.52 gbps
+fwd_barrier		   1.19 gflops    7.16 gbps
+bwd_barrier		   1.15 gflops    6.90 gbps
+fwd_p2p			   3.12 gflops   18.76 gbps
+bwd_p2p			   2.16 gflops   13.00 gbps
+fwd_p2p_tr_red		   4.54 gflops   27.33 gbps
+bwd_p2p_tr_red		   3.49 gflops   21.03 gbps
+fwd_barrier_perm	   1.12 gflops    6.75 gbps
+bwd_barrier_perm	   1.10 gflops    6.63 gbps
+fwd_p2p_perm		   3.50 gflops   21.07 gbps
+bwd_p2p_perm		   2.50 gflops   15.03 gbps
+fwd_p2p_tr_red_perm	   5.78 gflops   34.81 gbps
+bwd_p2p_tr_red_perm	   4.02 gflops   24.21 gbps
+OMP_NUM_THREADS=11
+input=/scratch/jpark103/matrices/ship_003.mtx
+parallelism 27.874513
+fwd_ref			   1.09 gflops    6.61 gbps
+bwd_ref			   1.01 gflops    6.13 gbps
+fwd_barrier		   1.78 gflops   10.77 gbps
+bwd_barrier		   1.54 gflops    9.35 gbps
+fwd_p2p			   3.13 gflops   18.97 gbps
+bwd_p2p			   2.40 gflops   14.56 gbps
+fwd_p2p_tr_red		   3.75 gflops   22.73 gbps
+bwd_p2p_tr_red		   2.89 gflops   17.52 gbps
+fwd_barrier_perm	   2.08 gflops   12.59 gbps
+bwd_barrier_perm	   1.98 gflops   11.98 gbps
+fwd_p2p_perm		   3.88 gflops   23.53 gbps
+bwd_p2p_perm		   3.73 gflops   22.63 gbps
+fwd_p2p_tr_red_perm	   4.70 gflops   28.45 gbps
+bwd_p2p_tr_red_perm	   4.65 gflops   28.19 gbps
+OMP_NUM_THREADS=22
+input=/scratch/jpark103/matrices/ship_003.mtx
+parallelism 27.874513
+fwd_ref			   1.09 gflops    6.63 gbps
+bwd_ref			   1.00 gflops    6.05 gbps
+fwd_barrier		   1.07 gflops    6.48 gbps
+bwd_barrier		   0.99 gflops    6.02 gbps
+fwd_p2p			   2.57 gflops   15.60 gbps
+bwd_p2p			   2.26 gflops   13.69 gbps
+fwd_p2p_tr_red		   3.20 gflops   19.42 gbps
+bwd_p2p_tr_red		   2.78 gflops   16.84 gbps
+fwd_barrier_perm	   1.19 gflops    7.23 gbps
+bwd_barrier_perm	   1.18 gflops    7.16 gbps
+fwd_p2p_perm		   4.66 gflops   28.21 gbps
+bwd_p2p_perm		   4.35 gflops   26.33 gbps
+fwd_p2p_tr_red_perm	   6.64 gflops   40.21 gbps
+bwd_p2p_tr_red_perm	   6.08 gflops   36.82 gbps
+OMP_NUM_THREADS=44
+input=/scratch/jpark103/matrices/ship_003.mtx
+parallelism 27.874513
+fwd_ref			   1.32 gflops    7.98 gbps
+bwd_ref			   1.14 gflops    6.89 gbps
+fwd_barrier		   0.94 gflops    5.68 gbps
+bwd_barrier		   0.90 gflops    5.42 gbps
+fwd_p2p			   3.35 gflops   20.32 gbps
+bwd_p2p			   3.07 gflops   18.59 gbps
+fwd_p2p_tr_red		   4.18 gflops   25.31 gbps
+bwd_p2p_tr_red		   3.82 gflops   23.14 gbps
+fwd_barrier_perm	   1.00 gflops    6.06 gbps
+bwd_barrier_perm	   0.99 gflops    6.01 gbps
+fwd_p2p_perm		   4.72 gflops   28.61 gbps
+bwd_p2p_perm		   4.81 gflops   29.14 gbps
+fwd_p2p_tr_red_perm	   7.37 gflops   44.64 gbps
+bwd_p2p_tr_red_perm	   7.18 gflops   43.48 gbps
+OMP_NUM_THREADS=11
+input=/scratch/jpark103/matrices/hollywood-2009.mtx
+parallelism 13.777784
+fwd_ref			   0.72 gflops    4.33 gbps
+bwd_ref			   0.65 gflops    3.91 gbps
+fwd_barrier		   0.83 gflops    5.02 gbps
+bwd_barrier		   0.85 gflops    5.16 gbps
+fwd_p2p			   0.89 gflops    5.37 gbps
+bwd_p2p			   0.96 gflops    5.79 gbps
+fwd_p2p_tr_red		   1.23 gflops    7.44 gbps
+bwd_p2p_tr_red		   1.27 gflops    7.66 gbps
+fwd_barrier_perm	   0.82 gflops    4.95 gbps
+bwd_barrier_perm	   0.87 gflops    5.27 gbps
+Error at 18144 expected 1.83531e+08 actual 1.83531e+08
+fwd_p2p_perm		   0.86 gflops    5.18 gbps
+bwd_p2p_perm		   0.96 gflops    5.79 gbps
+Error at 18144 expected 1.83531e+08 actual 1.83531e+08
+fwd_p2p_tr_red_perm	   1.19 gflops    7.18 gbps
+bwd_p2p_tr_red_perm	   1.28 gflops    7.76 gbps
+Error at 18144 expected 1.83531e+08 actual 1.83531e+08
+OMP_NUM_THREADS=22
+input=/scratch/jpark103/matrices/hollywood-2009.mtx
+parallelism 13.777784
+fwd_ref			   0.43 gflops    2.58 gbps
+bwd_ref			   0.40 gflops    2.42 gbps
+fwd_barrier		   0.60 gflops    3.62 gbps
+bwd_barrier		   0.67 gflops    4.02 gbps
+fwd_p2p			   0.73 gflops    4.43 gbps
+bwd_p2p			   0.92 gflops    5.54 gbps
+fwd_p2p_tr_red		   1.03 gflops    6.22 gbps
+bwd_p2p_tr_red		   1.23 gflops    7.41 gbps
+fwd_barrier_perm	   0.63 gflops    3.79 gbps
+bwd_barrier_perm	   0.64 gflops    3.85 gbps
+Error at 18144 expected 1.83531e+08 actual 1.83531e+08
+fwd_p2p_perm		   0.81 gflops    4.92 gbps
+bwd_p2p_perm		   0.94 gflops    5.68 gbps
+Error at 18144 expected 1.83531e+08 actual 1.83531e+08
+fwd_p2p_tr_red_perm	   1.15 gflops    6.97 gbps
+bwd_p2p_tr_red_perm	   1.29 gflops    7.80 gbps
+Error at 18144 expected 1.83531e+08 actual 1.83531e+08
+OMP_NUM_THREADS=44
+input=/scratch/jpark103/matrices/hollywood-2009.mtx
+parallelism 13.777784
+fwd_ref			   0.43 gflops    2.58 gbps
+bwd_ref			   0.60 gflops    3.63 gbps
+fwd_barrier		   0.47 gflops    2.84 gbps
+bwd_barrier		   0.51 gflops    3.08 gbps
+fwd_p2p			   0.68 gflops    4.12 gbps
+bwd_p2p			   0.91 gflops    5.50 gbps
+fwd_p2p_tr_red		   0.95 gflops    5.75 gbps
+bwd_p2p_tr_red		   1.22 gflops    7.34 gbps
+fwd_barrier_perm	   0.54 gflops    3.29 gbps
+bwd_barrier_perm	   0.54 gflops    3.27 gbps
+Error at 18144 expected 1.83531e+08 actual 1.83531e+08
+fwd_p2p_perm		   0.79 gflops    4.77 gbps
+bwd_p2p_perm		   0.94 gflops    5.69 gbps
+Error at 18144 expected 1.83531e+08 actual 1.83531e+08
+fwd_p2p_tr_red_perm	   1.14 gflops    6.86 gbps
+bwd_p2p_tr_red_perm	   1.29 gflops    7.76 gbps
+Error at 18144 expected 1.83531e+08 actual 1.83531e+08
