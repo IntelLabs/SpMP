@@ -55,7 +55,7 @@ namespace SpMP
   int n = nparents[task]; \
   int *c = parents[task]; \
   for (int i = 0; i < n; ++i) \
-    while (!taskFinished[c[i]]); \
+    while (!taskFinished[c[i]]) _mm_pause(); \
 }
 
 #ifdef MEASURE_SPIN_TIME
