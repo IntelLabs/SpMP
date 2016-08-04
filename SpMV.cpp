@@ -111,6 +111,8 @@ static void SpMV_(
     }
 #ifdef MEASURE_LOAD_BALANCE
     double t = omp_get_wtime();
+    int tid = omp_get_thread_num();
+    int nthreads = omp_get_num_threads();
 #pragma omp barrier
     barrierTimes[tid] = omp_get_wtime() - t;
 
