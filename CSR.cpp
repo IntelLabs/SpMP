@@ -670,6 +670,15 @@ double CSR::getAverageWidth(bool sorted /*= false*/) const
   return (double)total_width/m;
 }
 
+int CSR::getMaxDegree() const
+{
+  int max_degree = 0;
+  for (int i = 0; i < m; ++i) {
+    max_degree = std::max(max_degree, rowptr[i + 1] - rowptr[i]);
+  }
+  return max_degree;
+}
+
 bool CSR::equals(const CSR& A, bool print /*=false*/) const
 {
   int base = getBase();
