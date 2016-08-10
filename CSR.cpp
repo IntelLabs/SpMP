@@ -244,6 +244,23 @@ bool CSR::isSymmetric(bool checkValues, bool printFirstNonSymmetry) const
   return true;
 }
 
+bool CSR::isEveryDiagNonZero() const
+{
+  int base = getBase();
+  
+  for (int i = base; i < m + base; ++i) {
+    bool hasDiag = false;
+    for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+      if (colidx[j] == i && values[j] != 0) {
+        hasDiag = true;
+        break;
+      }
+    }
+    if (!hasDiag) return false;
+  }
+  return true;
+}
+
 void CSR::storeMatrixMarket(const char *fileName) const
 {
   int base = getBase();
