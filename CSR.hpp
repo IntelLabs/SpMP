@@ -147,7 +147,7 @@ public:
   CSR *transpose() const;
 
   bool isSymmetric(bool checkValues = true, bool printFirstNonSymmetry = false) const;
-  bool isEveryDiagNonZero() const;
+  bool hasZeroDiag() const;
 
   void make0BasedIndexing();
   void make1BasedIndexing();

@@ -244,21 +244,32 @@ bool CSR::isSymmetric(bool checkValues, bool printFirstNonSymmetry) const
   return true;
 }
 
-bool CSR::isEveryDiagNonZero() const
+bool CSR::hasZeroDiag() const
 {
   int base = getBase();
+  volatile bool hasZeroDiag = false;
   
-  for (int i = base; i < m + base; ++i) {
-    bool hasDiag = false;
-    for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
-      if (colidx[j] == i && values[j] != 0) {
-        hasDiag = true;
-        break;
+#pragma omp parallel
+  {
+    int iBegin, iEnd;
+    getLoadBalancedPartition(&iBegin, &iEnd, rowptr + base, m);
+    iBegin += base;
+    iEnd += base;
+
+    for (int i = iBegin; i < iEnd; ++i) {
+      bool hasDiag = false;
+      for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+        if (colidx[j] == i && values[j] != 0) {
+          hasDiag = true;
+          break;
+        }
       }
+      if (!hasDiag) hasZeroDiag = true;
+      if (hasZeroDiag) break;
     }
-    if (!hasDiag) return false;
   }
-  return true;
+
+  return hasZeroDiag;
 }
 
 void CSR::storeMatrixMarket(const char *fileName) const
