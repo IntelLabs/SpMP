@@ -99,7 +99,7 @@ CSR::CSR(const CSR& A) : m(A.m), n(A.n), values(NULL), idiag(NULL), diag(NULL), 
 }
 
 CSR::CSR(const char *fileName, int base /*=0*/, bool forceSymmetric /*=false*/, int pad /*=1*/)
- : rowptr(NULL), colidx(NULL), values(NULL), ownData_(true), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL)
+ : rowptr(NULL), colidx(NULL), values(NULL), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL), ownData_(true)
 {
   int m = atoi(fileName);
   char buf[1024];
@@ -124,7 +124,7 @@ CSR::CSR(const char *fileName, int base /*=0*/, bool forceSymmetric /*=false*/, 
 }
 
 CSR::CSR(int m, int n, int *rowptr, int *colidx, double *values) :
- m(m), n(n), rowptr(rowptr), colidx(colidx), values(values), ownData_(false), idiag(NULL), diag(NULL), extptr(NULL), diagptr(NULL)
+ m(m), n(n), rowptr(rowptr), colidx(colidx), values(values), idiag(NULL), diag(NULL), diagptr(NULL), extptr(NULL), ownData_(false)
 {
   assert(getBase() == 0 || getBase() == 1);
 }
@@ -494,8 +494,6 @@ CSR *CSR::transpose() const
   if (0 == n) {
     return AT;
   }
-
-  double t = omp_get_wtime();
 
   int *bucket = MALLOC(int, (n + 1)*omp_get_max_threads());
   bucket -= base;

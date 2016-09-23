@@ -204,7 +204,7 @@ void LoadImba::print(bool all)
                "avg/iteration, barrier avg/iteration\n");
         for (int j = 0;  j < numUses;  j++) {
             for (int i = 0;  i < numThreads;  i++) {
-                printf("%d, %d, %llu, %llu, %llu, %llu, %llu, %llu, %llu\n",
+                printf("%d, %d, %lu, %lu, %lu, %lu, %lu, %lu, %lu\n",
                        j, i, limba[i]->min[j], limba[i]->max[j],
                        limba[i]->tot[j], limba[i]->bar[j], limba[i]->cnt[j],
                        limba[i]->cnt[j] == 0 ? 0
@@ -231,7 +231,7 @@ void LoadImba::print(bool all)
         }
         tot /= numThreads;
         bar /= numThreads;
-        printf("%d, %d, %llu, %llu, %llu, %llu, %llu, %llu, %llu\n",
+        printf("%d, %d, %lu, %lu, %lu, %lu, %lu, %lu, %lu\n",
                j, numThreads, min, max, tot, bar, cnt,
                cnt == 0 ? 0 : tot/cnt, cnt == 0 ? 0 : bar/cnt);
     }

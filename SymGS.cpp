@@ -127,7 +127,7 @@ bool getSymmetricNnzPattern(
   const int *colidx = A->colidx - base;
   const int *extptr = A->extptr ? A->extptr - base : rowptr + 1;
 
-  size_t symRowPtrBegin;
+  size_t symRowPtrBegin = 0;
   if (A->useMemoryPool_()) {
     symRowPtrBegin = MemoryPool::getSingleton()->getTail();
   }
@@ -142,8 +142,6 @@ bool getSymmetricNnzPattern(
 
 #pragma omp parallel
   {
-    int tid = omp_get_thread_num();
-
     int iBegin, iEnd;
     getSimpleThreadPartition(&iBegin, &iEnd, m);
     iBegin += base;
@@ -160,6 +158,7 @@ bool getSymmetricNnzPattern(
 #pragma omp barrier
 
 #ifdef PRINT_TIME_BREAKDOWN
+    int tid = omp_get_thread_num();
     if (0 == tid) {
       printf("counting fwd dependencies takes %f\n", (__rdtsc() - t)/get_cpu_freq());
     }

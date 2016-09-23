@@ -42,9 +42,6 @@ void CSR::permuteRowptr(CSR *ret, const int *reversePerm) const
 
 #pragma omp parallel
   {
-    int nthreads = omp_get_num_threads();
-    int tid = omp_get_thread_num();
-
     int iBegin, iEnd;
     getSimpleThreadPartition(&iBegin, &iEnd, m);
 
@@ -144,7 +141,7 @@ void permuteColsInPlace_(CSR *A, const int *perm)
       double v = values[j];
 
       int k = j - 1;
-      while (k >= rowptr[i] & colidx[k] > c) {
+      while (k >= rowptr[i] && colidx[k] > c) {
         colidx[k + 1] = colidx[k];
         values[k + 1] = values[k];
         --k;

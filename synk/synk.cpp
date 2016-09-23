@@ -56,8 +56,6 @@ int ceil_log2(int n)
 /* constructor */
 Synk::Synk(int numCores_, int numThreadsPerCore_)
 {
-    int i, incr;
-
     numCores = numCores_;
     numThreadsPerCore = numThreadsPerCore_;
 

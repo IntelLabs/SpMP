@@ -491,9 +491,15 @@ void findLevels_(
   }
 #endif
 
-  unsigned long long tt0 = 0, tt1 = 0, tt2 = 0, tt3 = 0, tt4 = 0, tt5 = 0, tt6 = 0;
+//#define PRINT_TIME_BREAKDOWN
+#ifdef PRINT_TIME_BREAKDOWN
+  unsigned long long tt0 = 0, tt1 = 0;
+#endif
+  unsigned long long tt2 = 0, tt3 = 0, tt4 = 0, tt5 = 0, tt6 = 0;
 
+#ifdef PRINT_TIME_BREAKDOWN
   unsigned long long t = __rdtsc();
+#endif
   int n = m;
   int nthreads = omp_get_max_threads();
 
@@ -525,14 +531,18 @@ void findLevels_(
   levIndices.clear();
   levIndices.push_back(0);
 
+#ifdef PRINT_TIME_BREAKDOWN
   tt0 = __rdtsc() - t;
   unsigned long long ttt;
+#endif
 
 #pragma omp parallel num_threads(nthreads)
   {
   int tid = omp_get_thread_num();
+#ifdef PRINT_TIME_BREAKDOWN
   if (0 == tid) ttt = __rdtsc();
   unsigned long long tTemp = __rdtsc();
+#endif
 
   q[tid] = buffer + max(nthreads, n + nthreads - 1)/nthreads*2*tid;
   rowPtrs[tid] = buffer + max(nthreads, n + nthreads - 1)*2 + max(nthreads, n + nthreads - 1)/nthreads*2*tid;
@@ -556,7 +566,9 @@ void findLevels_(
   qTail[tid*16] = tailPtr - q[tid];
   nnzPrefixSum[tid + 1] = *rowPtr;
 
+#ifdef PRINT_TIME_BREAKDOWN
   if (0 == tid) tt1 = __rdtsc() - tTemp;
+#endif
   } // omp parallel
 
   assert(q[0]);
@@ -566,10 +578,9 @@ void findLevels_(
     levContToOrigPerm, levIndices, m,
     tt2, tt3, tt4, tt5, tt6);
 
+#ifdef PRINT_TIME_BREAKDOWN
   ttt = __rdtsc() - ttt;
 
-//#define PRINT_TIME_BREAKDOWN
-#ifdef PRINT_TIME_BREAKDOWN
   printf("t1 = %f\n", (__rdtsc() - t)/get_cpu_freq());
   printf("ttt = %f\n", ttt/get_cpu_freq());
   printf("tt0 = %f (init)\n", tt0/get_cpu_freq());
@@ -581,7 +592,6 @@ void findLevels_(
   printf("tt6 = %f (traverse)\n", tt6/get_cpu_freq());
 #undef PRINT_TIME_BREAKDOWN
 #endif
-  t = __rdtsc();
 
   if (useMemoryPool) {
     memoryPool->setTail(bufferBegin);
@@ -689,7 +699,6 @@ void findLevels_(
   //printf("t2 = %f\n", (__rdtsc() - t)/get_cpu_freq());
 
   // new permutation so that rows for a thread are contiguous
-  int i = 0;
   vector<int> rowPartialSum(nthreads + 1);
   rowPartialSum[0] = 0;
 
@@ -815,7 +824,6 @@ void constructTaskGraph_(
   const int *rowptr, const int *diagptr, const int *extptr, const int *colidx,
   const CostFunction& costFunction)
 {
-  vector<int>& levIndices = schedule->levIndices;
   vector<int>& taskBoundaries = schedule->taskBoundaries;
   vector<int>& threadBoundaries = schedule->threadBoundaries;
 
@@ -838,13 +846,15 @@ void constructTaskGraph_(
 
   int nnz = rowptr[m] - BASE;
 
+#ifdef TRSOLVER_LOG
   unsigned long long t;
+  double spmvTime = nnz*12/60/1e9;
+#endif
 #ifdef _OPENMP
   int nthreads = omp_get_max_threads();
 #else
   int nthreads = 1;
 #endif
-  double spmvTime = nnz*12/60/1e9;
 
   MemoryPool *memoryPool = MemoryPool::getSingleton();
   size_t origRowIdToTaskIdEnd = memoryPool->getHead();
@@ -855,9 +865,6 @@ void constructTaskGraph_(
       origRowIdToTaskId[threadContToOrigPerm[row]] = task;
     }
   }
-
-  int isBackwardBegin = 0;
-  int isBackwardEnd = 1;
 
   schedule->nparentsForward = schedule->allocate<short>(ntasks);
   schedule->parentsForward = schedule->allocate<int *>(ntasks);
@@ -892,9 +899,11 @@ void constructTaskGraph_(
   short *nparentsTemp;
   vector<vector<int> > tempParents;
 
-  unsigned long long barrierTimes[NUM_MAX_THREADS] = { 0 };
+  //unsigned long long barrierTimes[NUM_MAX_THREADS] = { 0 };
 
+#ifdef TRSOLVER_LOG
   t = __rdtsc();
+#endif
 
   size_t adjacencyBegin = memoryPool->getTail();
   CSR taskAdjacency, taskInvAdjacency;
@@ -922,7 +931,9 @@ void constructTaskGraph_(
   int perThreadOrigRowPtrSum[NUM_MAX_THREADS] = { 0 };
   int perThreadOrigInvRowPtrSum[NUM_MAX_THREADS] = { 0 };
   int perThreadRowPtrSum[NUM_MAX_THREADS] = { 0 };
+#ifdef TRSOLVER_LOG
   int numNewEdges[NUM_MAX_THREADS] = { 0 };
+#endif
   int *childrenBuf;
   int **children;
   short *numOfChildren;
@@ -1030,7 +1041,7 @@ void constructTaskGraph_(
   }
 
   // construct task dependency graph
-  unsigned long long t11 = 0, t2 = 0, t3 = 0, t4 = 0, t5 = 0;
+  unsigned long long t11 = 0, t2 = 0, t3 = 0; //, t4 = 0, t5 = 0;
   int rowPtrCnt = 0;
   vector<int> i2s(maxSize);
   int maxL = 0;
@@ -1112,8 +1123,8 @@ void constructTaskGraph_(
 #pragma omp barrier
 #endif
 
-  t4 = __rdtsc() - tempTimer;
-  barrierTimes[tid] = t4;
+  //t4 = __rdtsc() - tempTimer;
+  //barrierTimes[tid] = t4;
   tempTimer = __rdtsc();
 
   // compute prefix sum
@@ -1133,7 +1144,7 @@ void constructTaskGraph_(
       taskInvAdjacency.colidx + taskInvAdjacency.rowptr[task] + taskInvAdjacencyLengths[task]);
   }
 
-  t5 = __rdtsc() - tempTimer;
+  //t5 = __rdtsc() - tempTimer;
 
 #ifdef _OPENMP
   // construct FusedGSAndSpMVSchedule
@@ -1382,9 +1393,9 @@ void constructTaskGraph_(
     "average degree = %f\n",
     (double)perThreadRowPtrSum[nthreads]/(levIndices.size() - 2)/nthreads);
   fflush(stdout);
-#endif
 
   t = __rdtsc();
+#endif
 
   } // omp single
 
@@ -1453,8 +1464,6 @@ void constructTaskGraph_(
   if (transitiveReduction)
 #endif
   {
-    unsigned long long ttt = __rdtsc();
-
 #ifdef _OPENMP
 #pragma omp barrier
 #pragma omp single
@@ -1480,7 +1489,7 @@ void constructTaskGraph_(
     vector<int> tempAdj(maxL + 1);
     //int itr1DistanceSum = 0, itr2DistanceSum = 0, itrDistanceCnt = 0;
     //int itr1ContSum = 0, itr1ContCnt = 0, itr2ContSum = 0, itr2ContCnt = 0;
-    int skipSum = 0, skipCnt = 0;
+    //int skipSum = 0, skipCnt = 0;
     for (int t = t1Begin; t <= t1End; ++t) {
       for (int j = max(threadBoundaries[t], v1Begin); j < min(threadBoundaries[t + 1], v1End); ++j) {
         unsigned long long tempTimer = __rdtsc();
@@ -1566,7 +1575,9 @@ void constructTaskGraph_(
         (double)itr2ContSum/itr2ContCnt);*/
     }
 
+#ifdef TRSOLVER_LOG
     numNewEdges[tid] = rowPtrCnt;
+#endif
     tempAdj.clear();
 
     tempTimer = __rdtsc();
@@ -1574,7 +1585,7 @@ void constructTaskGraph_(
 #pragma omp barrier
 #endif
     t3 = __rdtsc() - tempTimer;
-    barrierTimes[tid] = t3;
+    //barrierTimes[tid] = t3;
 
 #ifdef _OPENMP
 #pragma omp barrier
@@ -1708,8 +1719,6 @@ void constructTaskGraph_(
   } // !transitiveReduction
 #endif
   } // omp parallel
-
-  unsigned long long ttt = __rdtsc();
 
 #ifdef TRSOLVER_LOG
   double dt = (__rdtsc() - t)/get_cpu_freq();

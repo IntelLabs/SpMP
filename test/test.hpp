@@ -65,7 +65,7 @@ void flushLlc()
 {
   double sum = 0;
 #pragma omp parallel for reduction(+:sum)
-  for (int i = 0; i < LLC_CAPACITY/sizeof(bufToFlushLlc[0]); ++i) {
+  for (size_t i = 0; i < LLC_CAPACITY/sizeof(bufToFlushLlc[0]); ++i) {
     sum += bufToFlushLlc[i];
   }
   FILE *fp = fopen("/dev/null", "w");

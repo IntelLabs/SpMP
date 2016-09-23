@@ -595,15 +595,12 @@ char *mm_typecode_to_str ( MM_typecode matcode )
     char buffer[MM_MAX_LINE_LENGTH];
     const char *types[4];
     char *mm_strdup(const char *);
-    int error =0;
 
 /* 
   check for MTX type 
 */
     if (mm_is_matrix(matcode)) 
         types[0] = MM_MTX_STR;
-    else
-        error=1;
 
 /* 
   check for CRD or ARR matrix 
@@ -826,13 +823,12 @@ void timestamp ( void )
 
   static char time_buffer[TIME_SIZE];
   const struct tm *tm;
-  size_t len;
   time_t now;
 
   now = time ( NULL );
   tm = localtime ( &now );
 
-  len = strftime ( time_buffer, TIME_SIZE, "%d %B %Y %I:%M:%S %p", tm );
+  strftime ( time_buffer, TIME_SIZE, "%d %B %Y %I:%M:%S %p", tm );
 
   printf ( "%s\n", time_buffer );
 

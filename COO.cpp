@@ -53,7 +53,10 @@ void COO::dealloc()
 void COO::storeMatrixMarket(const char *fileName) const
 {
   FILE *fp = fopen(fileName, "w");
-  assert(fp);
+  if (NULL == fp) {
+    fprintf(stderr, "Fail to open file %s\n", fileName);
+    return;
+  }
 
   MM_typecode matcode;
   mm_initialize_typecode(&matcode);
@@ -67,7 +70,6 @@ void COO::storeMatrixMarket(const char *fileName) const
     fprintf(
       stderr,
       "Fail to write matrix to %s (error code = %d)\n", fileName, err);
-    exit(-1);
   }
 }
 
@@ -288,7 +290,7 @@ static bool loadMatrixMarket_(const char *file, COO &coo, bool force_symmetric, 
   fclose(fp);
 
   if (0 == base) {
-    for (int i = 0; i < count; ++i) {
+    for (size_t i = 0; i < count; ++i) {
       rowidx[i]++;
       colidx[i]++;
     }
@@ -312,7 +314,7 @@ static bool loadMatrixMarket_(const char *file, COO &coo, bool force_symmetric, 
     for (int i = 0; i < m; ++i) {
       rowcnt[i + 1] += rowcnt[i];
     }
-    for (int i = 0; i < count; ++i) {
+    for (size_t i = 0; i < count; ++i) {
       int j = rowcnt[rowidx[i] - 1];
       colidx_temp[j] = colidx[i];
       rowcnt[rowidx[i] - 1]++;
@@ -327,7 +329,7 @@ static bool loadMatrixMarket_(const char *file, COO &coo, bool force_symmetric, 
       sort(colidx_temp + rowcnt[i], colidx_temp + rowcnt[i + 1]);
     }
 
-    for (int i = 0; i < count; ++i) {
+    for (size_t i = 0; i < count; ++i) {
       int x = rowidx[i], y = colidx[i];
       if (x != y) {
         if (!binary_search(

@@ -566,7 +566,6 @@ int selectSourcesWithPseudoDiameter(
 //#define PRINT_DBG
   int e = -1;
 
-  int tid = omp_get_thread_num();
   int *candidates = aux->candidates;
 
   bool first = true;
@@ -708,8 +707,8 @@ void CSR::getRCMPermutation(int *perm, int *inversePerm, bool pseudoDiameterSour
   timeConnectedComponents += omp_get_wtime();
 
 //#define MEASURE_LOAD_BALANCE
-  double tBegin = omp_get_wtime();
 #ifdef MEASURE_LOAD_BALANCE
+  double tBegin = omp_get_wtime();
   double barrierTimes[omp_get_max_threads()];
   double barrierTimeSum = 0;
 #endif
@@ -731,7 +730,7 @@ void CSR::getRCMPermutation(int *perm, int *inversePerm, bool pseudoDiameterSour
     if (compSizes[c] >= PAR_THR) continue;
 
     // short circuit for a singleton or a twin
-    if (rowptr[i + 1] == rowptr[i] + 1 && colidx[rowptr[i]] == i || rowptr[i + 1] == rowptr[i]) {
+    if ((rowptr[i + 1] == rowptr[i] + 1 && colidx[rowptr[i]] == i) || rowptr[i + 1] == rowptr[i]) {
       inversePerm[m - offset - 1] = i;
       perm[i] = m - offset - 1;
       ++singletonCnt;
@@ -758,8 +757,8 @@ void CSR::getRCMPermutation(int *perm, int *inversePerm, bool pseudoDiameterSour
       }
       if (u != -1 &&
         rowptr[u + 1] == rowptr[u] + 2 &&
-          (colidx[rowptr[u]] == u && colidx[rowptr[u] + 1] == i ||
-            colidx[rowptr[u] + 1] == u && colidx[rowptr[u]] == i)) {
+          ((colidx[rowptr[u]] == u && colidx[rowptr[u] + 1] == i) ||
+            (colidx[rowptr[u] + 1] == u && colidx[rowptr[u]] == i))) {
         inversePerm[m - offset - 1] = i;
         inversePerm[m - (offset + 1) - 1] = u;
         perm[i] = m - offset - 1;
@@ -838,8 +837,8 @@ void CSR::getRCMPermutation(int *perm, int *inversePerm, bool pseudoDiameterSour
 #endif // MEASURE_LOAD_BALANCE
   } // omp parallel
 
-  double timeFirstPhase = omp_get_wtime() - tBegin;
-  tBegin = omp_get_wtime();
+  //double timeFirstPhase = omp_get_wtime() - tBegin;
+  //tBegin = omp_get_wtime();
 
   int *prefixSum = prefixSum_array;
 
@@ -939,7 +938,7 @@ void CSR::getRCMPermutation(int *perm, int *inversePerm, bool pseudoDiameterSour
     placeTime2 += omp_get_wtime() - t;
   }
 
-  double timeSecondPhase = omp_get_wtime() - tBegin;
+  //double timeSecondPhase = omp_get_wtime() - tBegin;
 
   delete[] levels;
   delete[] children_array;
@@ -984,7 +983,10 @@ void CSR::getBFSPermutation(int *perm, int *inversePerm)
   // component.
   double timeSecondPhase = -omp_get_wtime();
   int nNodesinFirstComp = 0;
-  int numLevels = bfs<false, true>(this, 0, NULL, &bv, &aux, inversePerm, &nNodesinFirstComp);
+#ifdef PRINT_DBG
+  int numLevels =
+#endif
+    bfs<false, true>(this, 0, NULL, &bv, &aux, inversePerm, &nNodesinFirstComp);
 #ifdef PRINT_DBG
   printf("numLevels = %d\n", numLevels);
 #endif
@@ -1026,7 +1028,7 @@ void CSR::getBFSPermutation(int *perm, int *inversePerm)
     if (compSizes[c] >= PAR_THR || bv.get(i)) continue;
 
     // short circuit for a singleton or a twin
-    if (rowptr[i + 1] == rowptr[i] + 1 && colidx[rowptr[i] - base] - base == i || rowptr[i + 1] == rowptr[i]) {
+    if ((rowptr[i + 1] == rowptr[i] + 1 && colidx[rowptr[i] - base] - base == i) || rowptr[i + 1] == rowptr[i]) {
       inversePerm[offset] = i;
       perm[i] = offset;
       ++singletonCnt;
@@ -1053,8 +1055,8 @@ void CSR::getBFSPermutation(int *perm, int *inversePerm)
       }
       if (u != -1 &&
         rowptr[u + 1] == rowptr[u] + 2 &&
-          (colidx[rowptr[u] - base] - base == u && colidx[rowptr[u] + 1 - base] - base == i ||
-            colidx[rowptr[u] + 1 - base] - base == u && colidx[rowptr[u] - base] - base == i)) {
+          ((colidx[rowptr[u] - base] - base == u && colidx[rowptr[u] + 1 - base] - base == i) ||
+            (colidx[rowptr[u] + 1 - base] - base == u && colidx[rowptr[u] - base] - base == i))) {
         inversePerm[offset] = i;
         inversePerm[offset + 1] = u;
         perm[i] = offset;
@@ -1088,10 +1090,13 @@ void CSR::getBFSPermutation(int *perm, int *inversePerm)
     if (compSizes[c] < PAR_THR || bv.get(i)) continue;
     ++largeCompCnt;
 
-    int *components = nodesSortedByComp + compSizePrefixSum[c];
+    //int *components = nodesSortedByComp + compSizePrefixSum[c];
 
     int temp = -1;
-    int numLevels = bfs<false, true>(this, i, NULL, &bv, &aux, inversePerm + offset, &temp);
+#ifdef PRINT_DBG
+    int numLevels =
+#endif
+      bfs<false, true>(this, i, NULL, &bv, &aux, inversePerm + offset, &temp);
 #ifdef PRINT_DBG
     printf("numLevels = %d\n", numLevels);
 #endif

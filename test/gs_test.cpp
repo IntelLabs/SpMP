@@ -436,8 +436,6 @@ void backwardGSWithReorderedMatrix(
 
 int main(int argc, char **argv)
 {
-  double tBegin = omp_get_wtime();
-
   /////////////////////////////////////////////////////////////////////////////
   // Load input
   /////////////////////////////////////////////////////////////////////////////
@@ -455,7 +453,6 @@ int main(int argc, char **argv)
   char buf[1024];
   sprintf(buf, "%d", m);
 
-  bool readFromFile = argc > 1 ? strcmp(buf, argv[1]) && !strstr(argv[1], ".mtx"): false;
   printf("input=%s\n", argc > 1 ? argv[1] : buf);
 
   CSR *A = new CSR(argc > 1 ? argv[1] : buf);

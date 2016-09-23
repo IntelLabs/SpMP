@@ -3,23 +3,34 @@ LOADIMBA=${loadimba}
 
 LIBRARY		= libspmp.a
 
-CC		= icpc
-CCFLAGS		= -qopenmp -std=c++11 -Wno-deprecated -Wall
+ifdef CUSTOM_CXX
+  CXX   = $(CUSTOM_CXX)
+  # Assume gcc
+  CXXFLAGS		= -fopenmp -std=c++11 -Wno-deprecated -Wall
+else
+  CXX		= icpc
+  CXXFLAGS		= -qopenmp -std=c++11 -Wno-deprecated -Wall
+endif
 
 ifeq (yes, $(DBG))
-  CCFLAGS += -O0 -g
+  CXXFLAGS += -O0 -g
 else
-  CCFLAGS += -O3 -DNDEBUG
+  CXXFLAGS += -O3 -DNDEBUG
 endif
 
 ifeq (yes, $(XEON_PHI))
-  CCFLAGS	+= -mmic
+  CXXFLAGS	+= -mmic
 else
-  CCFLAGS += -xHost
+  ifndef CUSTOM_CXX
+    CXXFLAGS += -xHost
+  endif
 endif
 
 ifeq (yes, $(MKL))
-  CCFLAGS += -mkl -DMKL
+  ifndef CUSTOM_CXX
+    CXXFLAGS += -mkl
+  endif
+  CXXFLAGS += -DMKL
 endif
 
 ifeq (${LOADIMBA}, 1)
@@ -29,7 +40,7 @@ endif
 DEFS += $(strip $(foreach var, $(yesnolist), $(if $(filter 1, $($(var))), -D$(var))))
 DEFS += $(strip $(foreach var, $(deflist), $(if $($(var)), -D$(var)=$($(var)))))
 
-CCFLAGS 	+= ${DEFS}
+CXXFLAGS 	+= ${DEFS}
 SRCS = $(wildcard *.cpp) $(wildcard reordering/*.cpp)
 SYNK_SRCS = $(wildcard synk/*.cpp)
 OBJS = $(SRCS:.cpp=.o) $(addsuffix .o, $(addprefix synk/, $(basename $(notdir $(SYNK_SRCS)))))
@@ -44,10 +55,10 @@ all: clean
 test: test/gs_test test/reordering_test test/trsv_test
 
 test/%: test/%.o $(LIBRARY)
-	$(CC) $(CCFLAGS) -o $@ $^
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
 %.o: %.cpp
-	$(CC) $(CCFLAGS) -fPIC -c $< -o $@
+	$(CXX) $(CXXFLAGS) -fPIC -c $< -o $@
 
 clean:
 	rm -f $(LIBRARY) $(OBJS) test/*.o

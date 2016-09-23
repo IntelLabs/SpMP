@@ -74,7 +74,7 @@ void findConnectedComponents_(
   int nComp;
   *nodesSortedByComp = new int[A->m];
 
-  double t = omp_get_wtime();
+  //double t = omp_get_wtime();
 
   int *nodesToFind = NULL;
   int m = A->m;

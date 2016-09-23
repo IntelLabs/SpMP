@@ -482,8 +482,6 @@ void bfs_serial(
 
   int tid = omp_get_thread_num();
 
-  int numLevels = 0;
-
   int **q = aux->q;
   q[0][tid*max(A->m, A->n)] = source;
   bv1->set(source);
@@ -725,12 +723,6 @@ extern "C" {
 
 void bfsBipartite(CSR& A, CSR& AT, int *rowPerm, int *rowInversePerm, int *colPerm, int *colInversePerm)
 {
-  int base = A.getBase();
-
-  int numOfComponents;
-  int *compToRoot, *compSizes, *compSizePrefixSum;
-  int *nodesSortedByComp;
-
   BitVector bv1(A.m);
   BitVector bv2(A.n);
 
@@ -756,7 +748,7 @@ void bfsBipartite(CSR& A, CSR& AT, int *rowPerm, int *rowInversePerm, int *colPe
 
       int nRowVisited, nColVisited;
 
-      int nLevels = bfs(
+      /*int nLevels = */bfs(
         &A, &AT, i, &bv1, &bv2, &aux,
         rowInversePerm + rowPermIdx, colInversePerm + colPermIdx,
         &nRowVisited, &nColVisited);
@@ -791,7 +783,7 @@ void bfsBipartite(CSR& A, CSR& AT, int *rowPerm, int *rowInversePerm, int *colPe
 
       int nRowVisited, nColVisited;
 
-      int nLevels = bfs(
+      /*int nLevels = */bfs(
         &AT, &A, i, &bv2, &bv1, &aux,
         colInversePerm + colPermIdx, rowInversePerm + rowPermIdx,
         &nColVisited, &nRowVisited);

@@ -66,7 +66,6 @@ void getLoadBalancedPartition(int *begin, int *end, const int *prefixSum, int n)
 void getInversePerm(int *inversePerm, const int *perm, int n)
 {
 #pragma omp parallel for
-#pragma simd
   for (int i = 0; i < n; ++i) {
     inversePerm[perm[i]] = i;
   }

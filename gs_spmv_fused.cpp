@@ -29,7 +29,7 @@ namespace SpMP
 {
 
 FusedGSAndSpMVSchedule::FusedGSAndSpMVSchedule(LevelSchedule *gsSchedule) :
-  nparents(NULL), parentsBuf(NULL), parents(NULL), gsSchedule_(gsSchedule)
+  nparents(NULL), parents(NULL), parentsBuf(NULL), gsSchedule_(gsSchedule)
 {
 }
 
