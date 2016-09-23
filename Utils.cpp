@@ -15,7 +15,6 @@ using namespace std;
 namespace SpMP
 {
 
-static const double DEFAULT_CPU_FREQ = 3.33e9;
 double get_cpu_freq()
 {
   static double freq = DBL_MAX;
