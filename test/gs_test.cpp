@@ -461,6 +461,12 @@ int main(int argc, char **argv)
   // Construct schedules
   /////////////////////////////////////////////////////////////////////////////
 
+  bool hasZeroDiag = A->hasZeroDiag();
+  if (hasZeroDiag) {
+    fprintf(stderr, "Matrix has a zero diagonal element. Can't do triangular solve\n");
+    return -1;
+  }
+
   LevelSchedule *barrierSchedule = new LevelSchedule;
   barrierSchedule->useBarrier = true;
   barrierSchedule->transitiveReduction = false;

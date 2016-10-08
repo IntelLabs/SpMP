@@ -470,6 +470,12 @@ int main(int argc, char **argv)
   // Construct schedules
   /////////////////////////////////////////////////////////////////////////////
 
+  bool hasZeroDiag = A->hasZeroDiag();
+  if (hasZeroDiag) {
+    fprintf(stderr, "Matrix has a zero diagonal element. Can't do Gauss Seidel\n");
+    return -1;
+  }
+
   int *symRowPtr = NULL, *symColIdx = NULL, *symDiagPtr = NULL, *symExtPtr = NULL;
   bool wasSymmetric = getSymmetricNnzPattern(A, &symRowPtr, &symDiagPtr, &symExtPtr, &symColIdx);
 
