@@ -21,8 +21,12 @@ endif
 ifeq (yes, $(XEON_PHI))
   CXXFLAGS	+= -mmic
 else
-  ifndef CUSTOM_CXX
-    CXXFLAGS += -xHost
+  ifeq (yes, $(KNL))
+    CXXFLAGS += -xMIC-AVX512
+  else
+    ifndef CUSTOM_CXX
+      CXXFLAGS += -xHost
+    endif
   endif
 endif
 
