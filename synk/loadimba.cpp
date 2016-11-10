@@ -33,6 +33,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <omp.h>
 #include <stdio.h>
 
+#ifdef __GNUC__
+#include <x86intrin.h>
+#endif
+
 #include "cpuid.h"
 #include "loadimba.hpp"
 
