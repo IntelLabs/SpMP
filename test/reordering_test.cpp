@@ -127,6 +127,51 @@ int main(int argc, char **argv)
 
   printf("MKL SpMV BW");
   printEfficiency(times, REPEAT, flops, bytes);
+
+  // Inspector-Executor interface in MKL 11.3+
+  sparse_matrix_t mklA;
+  sparse_status_t stat = mkl_sparse_d_create_csr(
+    &mklA,
+    SPARSE_INDEX_BASE_ZERO, A->m, A->n,
+    A->rowptr, A->rowptr + 1,
+    A->colidx, A->values);
+
+  if (SPARSE_STATUS_SUCCESS != stat) {
+    fprintf(stderr, "Failed to create mkl csr\n");
+    return -1;
+  }
+
+  matrix_descr descA;
+  descA.type = SPARSE_MATRIX_TYPE_GENERAL;
+  descA.diag = SPARSE_DIAG_NON_UNIT;
+
+  stat = mkl_sparse_set_mv_hint(
+    mklA, SPARSE_OPERATION_NON_TRANSPOSE, descA, REPEAT);
+
+  if (SPARSE_STATUS_SUCCESS != stat) {
+    fprintf(stderr, "Failed to set mv hint\n");
+    return -1;
+  }
+
+  stat = mkl_sparse_optimize(mklA);
+
+  if (SPARSE_STATUS_SUCCESS != stat) {
+    fprintf(stderr, "Failed to sparse optimize\n");
+    return -1;
+  }
+
+  for (int i = 0; i < REPEAT; ++i) {
+    for (int j = 0; j < 16; ++j) flushLlc();
+
+    double t = omp_get_wtime();
+    mkl_sparse_d_mv(
+      SPARSE_OPERATION_NON_TRANSPOSE, 1, mklA, descA, x, 0, y);
+    times[i] = omp_get_wtime() - t;
+  }
+  correctnessCheck(A, y);
+
+  printf("MKL inspector-executor SpMV BW");
+  printEfficiency(times, REPEAT, flops, bytes);
 #endif
 
   int *perm = MALLOC(int, A->m);
