@@ -88,6 +88,26 @@ static void SpMV_(
         }
       }
     }
+    else if (-1 == alpha && 1 == beta && 0 == gamma) {
+      if (values) {
+        for (int i = iBegin; i < iEnd; ++i) {
+          T sum = y[i];
+          for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+            sum -= values[j]*x[colidx[j]];
+          }
+          w[i] = sum;
+        }
+      }
+      else {
+        for (int i = iBegin; i < iEnd; ++i) {
+          T sum = y[i];
+          for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+            sum -= x[colidx[j]];
+          }
+          w[i] = sum;
+        }
+      }
+    }
     else {
       if (values) {
         for (int i = iBegin; i < iEnd; ++i) {
