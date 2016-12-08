@@ -434,6 +434,111 @@ void backwardGSWithReorderedMatrix(
   } // omp parallel
 }
 
+/**
+ * Backward Gauss-Seidel smoother parallelized with level scheduling
+ * and point-to-point synchronization
+ */
+void backwardSolveWithReorderedMatrix(
+  const CSR& A, double y[], const double b[],
+  const LevelSchedule& schedule)
+{
+  ADJUST_FOR_BASE;
+
+#pragma omp parallel
+  {
+    int nthreads = omp_get_num_threads();
+    int tid = omp_get_thread_num();
+
+    const int ntasks = schedule.ntasks;
+    const short *nparents = schedule.nparentsBackward;
+    const vector<int>& threadBoundaries = schedule.threadBoundaries;
+    const vector<int>& taskBoundaries = schedule.taskBoundaries;
+
+    int nPerThread = (ntasks + nthreads - 1)/nthreads;
+    int nBegin = min(nPerThread*tid, ntasks);
+    int nEnd = min(nBegin + nPerThread, ntasks);
+
+    volatile int *taskFinished = schedule.taskFinished;
+    int **parents = schedule.parentsBackward;
+
+    memset((char *)(taskFinished + nBegin), 0, (nEnd - nBegin)*sizeof(int));
+
+    synk::Barrier::getInstance()->wait(tid);
+
+    for (int task = threadBoundaries[tid + 1] - 1; task >= threadBoundaries[tid]; --task) {
+      SPMP_LEVEL_SCHEDULE_WAIT;
+
+      for (int i = taskBoundaries[task + 1] - 1 + base; i >= taskBoundaries[task] + base; --i) {
+        double sum = b[i];
+        for (int j = rowptr[i + 1] - 1; j >= rowptr[i]; --j) {
+          sum -= values[j]*y[colidx[j]];
+        }
+        y[i] = sum*idiag[i];
+      }
+
+      SPMP_LEVEL_SCHEDULE_NOTIFY;
+    } // for each task
+  } // omp parallel
+}
+
+/**
+ * Forward Gauss-Seidel smoother parallelized with level scheduling
+ * and point-to-point synchronization
+ * fused with the lower triangular part of backward GS
+ *
+ * y = A \ b
+ * b = y - A*x
+ *
+ * \ref "HPCG Performance Improvement on the K Computer",
+ *      Kumahata et al., SC16 HPCG BoF
+ *      http://www.hpcg-benchmark.org/downloads/sc16/HPCG_on_the_K_Computer.pdf
+ */
+void forwardSolveWithReorderedMatrixFused(
+  const CSR& A, double y[], double b[], const double x[],
+  const LevelSchedule& schedule)
+{
+  ADJUST_FOR_BASE;
+
+#pragma omp parallel
+  {
+    int nthreads = omp_get_num_threads();
+    int tid = omp_get_thread_num();
+
+    const int ntasks = schedule.ntasks;
+    const short *nparents = schedule.nparentsForward;
+    const vector<int>& threadBoundaries = schedule.threadBoundaries;
+    const vector<int>& taskBoundaries = schedule.taskBoundaries;
+
+    int nPerThread = (ntasks + nthreads - 1)/nthreads;
+    int nBegin = min(nPerThread*tid, ntasks);
+    int nEnd = min(nBegin + nPerThread, ntasks);
+
+    volatile int *taskFinished = schedule.taskFinished;
+    int **parents = schedule.parentsForward;
+
+    memset((char *)(taskFinished + nBegin), 0, (nEnd - nBegin)*sizeof(int));
+
+    synk::Barrier::getInstance()->wait(tid);
+
+    for (int task = threadBoundaries[tid]; task < threadBoundaries[tid + 1]; ++task) {
+      SPMP_LEVEL_SCHEDULE_WAIT;
+
+      for (int i = taskBoundaries[task] + base; i < taskBoundaries[task + 1] + base; ++i) {
+        double sum1 = b[i];
+        double sum2 = 0;
+        for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
+          sum1 -= values[j]*y[colidx[j]];
+          sum2 += values[j]*x[colidx[j]];
+        }
+        y[i] = sum1*idiag[i];
+        b[i] = y[i] - sum2;
+      }
+
+      SPMP_LEVEL_SCHEDULE_NOTIFY;
+    } // for each task
+  } // omp parallel
+}
+
 int main(int argc, char **argv)
 {
   /////////////////////////////////////////////////////////////////////////////
@@ -456,6 +561,13 @@ int main(int argc, char **argv)
   printf("input=%s\n", argc > 1 ? argv[1] : buf);
 
   CSR *A = new CSR(argc > 1 ? argv[1] : buf);
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Split lower and upper triangular parts
+  /////////////////////////////////////////////////////////////////////////////
+
+  CSR *L = new CSR, *U = new CSR;
+  splitLU(*A, L, U);
 
   /////////////////////////////////////////////////////////////////////////////
   // Construct schedules
@@ -493,6 +605,8 @@ int main(int argc, char **argv)
   assert(isPerm(invPerm, A->m));
 
   CSR *APerm = A->permute(perm, invPerm, true /*sort*/);
+  CSR *LPerm = L->permute(perm, invPerm, true);
+  CSR *UPerm = U->permute(perm, invPerm, true);
 
   /////////////////////////////////////////////////////////////////////////////
   // Allocate vectors
@@ -588,7 +702,7 @@ int main(int argc, char **argv)
   double *bPerm = getReorderVector(b, perm, A->m);
   double *tempVector = MALLOC(double, A->m);
 
-  for (int o = BARRIER; o <= P2P_WITH_TRANSITIVE_REDUCTION; ++o) {
+  for (int o = BARRIER; o <= P2P_WITH_TRANSITIVE_REDUCTION_AND_FWD_BWD_FUSION; ++o) {
     SynchronizationOption option = (SynchronizationOption)o;
 
     for (int i = 0; i < REPEAT; ++i) {
@@ -614,6 +728,14 @@ int main(int argc, char **argv)
         forwardGSWithReorderedMatrix(
           *APerm, y, bPerm, *p2pScheduleWithTransitiveReduction);
         break;
+      case P2P_WITH_TRANSITIVE_REDUCTION_AND_FWD_BWD_FUSION:
+        UPerm->multiplyWithVector(tempVector, -1, y, 1, bPerm, 0);
+          // tempVector = bPerm - UPerm*y
+        forwardSolveWithReorderedMatrixFused(
+          *LPerm, y, tempVector, x, *p2pScheduleWithTransitiveReduction);
+          // y = LPerm \ tempVector
+          // tempVector = y - LPerm*x
+        break;
       default: assert(false); break;
       }
 
@@ -633,6 +755,10 @@ int main(int argc, char **argv)
         backwardGSWithReorderedMatrix(
           *APerm, x, y, *p2pScheduleWithTransitiveReduction);
         break;
+      case P2P_WITH_TRANSITIVE_REDUCTION_AND_FWD_BWD_FUSION:
+        backwardSolveWithReorderedMatrix(
+          *UPerm, x, tempVector, *p2pScheduleWithTransitiveReduction);
+        break;
       default: assert(false); break;
       }
 
@@ -645,6 +771,7 @@ int main(int argc, char **argv)
           case BARRIER: printf("barrier_perm\t"); break;
           case P2P: printf("p2p_perm\t\t"); break;
           case P2P_WITH_TRANSITIVE_REDUCTION: printf("p2p_tr_red_perm\t"); break;
+          case P2P_WITH_TRANSITIVE_REDUCTION_AND_FWD_BWD_FUSION: printf("p2p_tr_red_perm_fused\t"); break;
           default: assert(false); break;
           }
           printEfficiency(
@@ -662,7 +789,12 @@ int main(int argc, char **argv)
   delete p2pScheduleWithTransitiveReduction;
 
   delete A;
+  delete L;
+  delete U;
+  
   delete APerm;
+  delete LPerm;
+  delete UPerm;
 
   FREE(b);
   FREE(y);
