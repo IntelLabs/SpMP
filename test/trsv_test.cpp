@@ -535,8 +535,8 @@ int main(int argc, char **argv)
   assert(isPerm(perm, A->m));
   assert(isPerm(invPerm, A->m));
 
-  CSR *LPerm = L->permute(perm, invPerm);
-  CSR *UPerm = U->permute(perm, invPerm);
+  CSR *LPerm = L->permute(perm, invPerm, true);
+  CSR *UPerm = U->permute(perm, invPerm, true);
 
   /////////////////////////////////////////////////////////////////////////////
   // Allocate vectors
