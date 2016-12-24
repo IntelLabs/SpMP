@@ -190,7 +190,7 @@ bool CSR::isSymmetric(bool checkValues, bool printFirstNonSymmetry) const
       for (int i = begin; i < end; ++i) {
         for (int j = rowptr[i]; j < extptr[i]; ++j) {
           int c = colidx[j];
-          if (c != i) {
+          if (c != i && c >= 0 && c < m) {
             bool hasPair = false;
             for (int k = rowptr[c]; k < extptr[c]; ++k) {
               if (colidx[k] == i) {
@@ -216,7 +216,7 @@ bool CSR::isSymmetric(bool checkValues, bool printFirstNonSymmetry) const
     for (int i = base; i < m + base; ++i) {
       for (int j = rowptr[i]; j < extptr[i]; ++j) {
         int c = colidx[j];
-        if (c != i) {
+        if (c != i && c >= 0 && c < m) {
           bool hasPair = false;
           for (int k = rowptr[c]; k < extptr[c]; ++k) {
             if (colidx[k] == i) {
