@@ -104,6 +104,7 @@ Barrier *Barrier::getInstance()
 void Barrier::deleteInstance()
 {
     delete instance;
+    instance = NULL;
 }
 
 /* constructor */
