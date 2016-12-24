@@ -74,6 +74,9 @@ void getSimpleThreadPartition(int* begin, int *end, int n);
  */
 void getLoadBalancedPartition(int *begin, int *end, const int *prefixSum, int n);
 
+void parMemset(void *ptr, int c, size_t n);
+void parMemcpy(void *dst, const void *src, size_t n);
+
 void getInversePerm(int *inversePerm, const int *perm, int n);
 
 /**

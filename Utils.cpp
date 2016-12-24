@@ -62,6 +62,36 @@ void getLoadBalancedPartition(int *begin, int *end, const int *prefixSum, int n)
   assert(*end >= 0 && *end <= n);
 }
 
+void parMemset(void *ptr, int c, size_t n)
+{
+#pragma omp parallel if (!omp_in_parallel())
+  {
+    int nCacheLines = n/64;
+    int nCacheLineBegin, nCacheLineEnd;
+    getSimpleThreadPartition(&nCacheLineBegin, &nCacheLineEnd, nCacheLines);
+
+    int nBegin = nCacheLineBegin*64;
+    int nEnd = omp_get_thread_num() == omp_get_num_threads() - 1 ? n : nCacheLineEnd*64;
+
+    memset((char *)ptr + nBegin, c, nEnd - nBegin);
+  }
+}
+
+void parMemcpy(void *dst, const void *src, size_t n)
+{
+#pragma omp parallel if (!omp_in_parallel())
+  {
+    int nCacheLines = n/64;
+    int nCacheLineBegin, nCacheLineEnd;
+    getSimpleThreadPartition(&nCacheLineBegin, &nCacheLineEnd, nCacheLines);
+
+    int nBegin = nCacheLineBegin*64;
+    int nEnd = omp_get_thread_num() == omp_get_num_threads() - 1 ? n : nCacheLineEnd*64;
+
+    memcpy((char *)dst + nBegin, (char *)src + nBegin, nEnd - nBegin);
+  }
+}
+
 void getInversePerm(int *inversePerm, const int *perm, int n)
 {
 #pragma omp parallel for
