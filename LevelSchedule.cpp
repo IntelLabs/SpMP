@@ -119,11 +119,6 @@ void LevelSchedule::init_()
   threadContToOrigPerm= NULL;
   parentsBuf[0] = parentsBuf[1] = NULL;
   fusedSchedule = NULL;
-#ifdef LEVEL_CONT_LAYOUT
-  levContToOrigPerm= NULL;
-  origToLevContPerm= NULL;
-  threadContToLevContPerm = NULL;
-#endif
 }
 
 void LevelSchedule::constructTaskGraph(CSR& A)
@@ -329,7 +324,7 @@ void findLevels_(
           int jEnd = extptr[pred];
           for (int j = jBegin; j < jEnd; ++j) {
             int succ = colidx[j] - BASE;
-            if (succ >= m) continue; // for a "fat" matrices with halo
+            if (succ < 0 || succ >= m) continue; // for a "fat" matrices with halo
             --nparents[succ];
             assert(nparents[succ] >= 0);
             if (nparents[succ] == 0) {
@@ -410,7 +405,7 @@ void findLevels_(
         int jEnd = extptr[pred];
         for (int j = jBegin; j < jEnd; ++j) {
           int succ = colidx[j] - BASE;
-          if (succ >= m) continue; // for a "fat" matrices with halo
+          if (succ < 0 || succ >= m) continue; // for a "fat" matrices with halo
           if (__sync_fetch_and_add(nparents + succ, -1) == 1) {
             *tailPtr = succ;
             *(rowPtr + 1) =
@@ -506,9 +501,7 @@ void findLevels_(
   MemoryPool *memoryPool = MemoryPool::getSingleton();
 
   int nAligned = (n + 15)/16*16;
-#ifndef LEVEL_CONT_LAYOUT
   int *levContToOrigPerm;
-#endif
   levContToOrigPerm = schedule->allocate<int>(nAligned + 128);
 
   size_t bufferBegin = memoryPool->getTail();
@@ -553,7 +546,11 @@ void findLevels_(
 
 #pragma omp for
   for (int i = 0; i < n; ++i) {
-    nparents[i] = diagptr[i] - rowptr[i];
+    int cnt = 0;
+    for (int j = rowptr[i]; j < diagptr[i]; ++j) {
+      if (colidx[j] >= 0) ++cnt;
+    }
+    nparents[i] = cnt;
     if (nparents[i] == 0) {
       *tailPtr = i;
       *(rowPtr + 1) = *rowPtr + extptr[i] - diagptr[i] - 1;
@@ -797,21 +794,9 @@ void findLevels_(
     taskRows = NULL;
   }
 
-#ifdef LEVEL_CONT_LAYOUT
-  origToLevContPerm= MALLOC(int, n);
-  threadContToLevContPerm = MALLOC(int, n);
-  getInversePerm(origToLevContPerm, levContToOrigPerm, n);
-
-#pragma omp parallel for
-  for (int i = 0; i < n; ++i) {
-    threadContToLevContPerm[i] =
-      origToLevContPerm[threadContToOrigPerm[i]];
-  }
-#else
   if (!useMemoryPool) {
     FREE(levContToOrigPerm);
   }
-#endif
 
   schedule->ntasks = threadBoundaries.back();
 }
@@ -956,8 +941,15 @@ void constructTaskGraph_(
     int invSize = 0;
     for (int i1Perm = taskBoundaries[v1]; i1Perm < taskBoundaries[v1 + 1]; ++i1Perm) {
       int i1 = threadContToOrigPerm[i1Perm];
-      size += extptr[i1] - diagptr[i1] - 1;
-      invSize += diagptr[i1] - rowptr[i1] + 1; // additional 1 for intra-thread
+
+      for (int j = rowptr[i1]; j < diagptr[i1]; ++j) {
+        if (colidx[j] - BASE >= 0 && colidx[j] - BASE < m) ++invSize;
+      }
+      ++invSize; // additional 1 for intra-thread dependency
+
+      for (int j = diagptr[i1] + 1; j < extptr[i1]; ++j) {
+        if (colidx[j] - BASE >= 0 && colidx[j] - BASE < m) ++size;
+      }
     }
     taskAdjacency.rowptr[v1] = origRowPtrCnt;
     taskInvAdjacency.rowptr[v1] = origInvRowPtrCnt;
@@ -1060,6 +1052,7 @@ void constructTaskGraph_(
         int begin = diagptr[i1] + 1;
         int end = extptr[i1];
         for (int j = begin; j < end; ++j) {
+          if (colidx[j] - BASE < 0 || colidx[j] - BASE >= m) continue;
           int v = origRowIdToTaskId[colidx[j] - BASE];
           if (v < boundaryBegin || v >= boundaryEnd) {
             i2s[size] = v;
@@ -1100,11 +1093,16 @@ void constructTaskGraph_(
           }
           intraAdded = true;
         }
+        // add reverse dependency
         int tempL = __sync_fetch_and_add(&taskInvAdjacencyLengths[v2], 1);
+        assert(taskInvAdjacency.rowptr[v2] + tempL >= 0);
+        assert(taskInvAdjacency.rowptr[v2] + tempL < (nnz - m)/2 + m + ntasks);
         taskInvAdjacency.colidx[taskInvAdjacency.rowptr[v2] + tempL] = v1;
       }
       if (!intraAdded && transitiveReduction) {
         int tempL = __sync_fetch_and_add(&taskInvAdjacencyLengths[v1 + 1], 1);
+        assert(taskInvAdjacency.rowptr[v1 + 1] + tempL >= 0);
+        assert(taskInvAdjacency.rowptr[v1 + 1] + tempL < (nnz - m)/2 + m + ntasks);
         taskInvAdjacency.colidx[taskInvAdjacency.rowptr[v1 + 1] + tempL] = v1;
       }
 
