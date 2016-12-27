@@ -66,9 +66,11 @@ public:
     void init(int tid);
     void wait(int tid);
 
-protected:
+    // Don't use this constructor unless you want
+    // barriers among a subset of cores
     Barrier(int numCores, int numThreadsPerCore);
-      /* not public to be used as a singleton */
+
+protected:
 
     CoreBarrier **cores;
     CoreBarrier **threadCores;

@@ -68,9 +68,9 @@ public:
     ThreadLoadImba              **limba;
     int                         numUses;
 
-protected:
+    // Don't use this constructor unless you want
+    // barriers among a subset of cores
     LoadImba(int numCores, int numThreadsPerCore);
-      /* not public to be used as a singleton */
 };
 
 }
