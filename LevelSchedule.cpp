@@ -1596,6 +1596,14 @@ void constructTaskGraph_(
 #pragma omp master
 #endif
     {
+      if (!useMemoryPool) {
+        FREE(taskAdjacency.rowptr);
+        FREE(taskAdjacency.colidx);
+
+        FREE(taskInvAdjacency.rowptr);
+        FREE(taskInvAdjacency.colidx);
+      }
+
       taskAdjacency.~CSR();
       taskInvAdjacency.~CSR();
       if (useMemoryPool) {
