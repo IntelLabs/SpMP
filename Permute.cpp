@@ -219,6 +219,12 @@ static void permuteMain_(
           newColidx[k] = newColIdx;
           newValues[k] = values[j];
         }
+        if (in->extptr) {
+          for (int j = end; j < rowptr[row + 1]; ++j, ++k) {
+            newColidx[k] = colidx[j];
+            newValues[k] = values[j];
+          }
+        }
       } // for each row
     }
     else {
@@ -240,6 +246,13 @@ static void permuteMain_(
             diagCol = newColIdx;
           }
         }
+        if (in->extptr) {
+          for (int j = end; j < rowptr[row + 1]; ++j, ++k) {
+            newColidx[k] = colidx[j];
+            newValues[k] = values[j];
+          }
+        }
+
         assert(!diagptr || diagCol != -1);
 
         if (SORT) {
