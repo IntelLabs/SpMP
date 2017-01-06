@@ -136,27 +136,59 @@ void permuteColsInPlace_(CSR *A, const int *perm)
       if (c == i) diagCol = perm[c - BASE] + BASE;
     }
 
-    for (int j = rowptr[i] + 1; j < extptr[i]; ++j) {
-      int c = colidx[j];
-      double v = values[j];
-
-      int k = j - 1;
-      while (k >= rowptr[i] && colidx[k] > c) {
-        colidx[k + 1] = colidx[k];
-        values[k + 1] = values[k];
-        --k;
-      }
-
-      colidx[k + 1] = c;
-      values[k + 1] = v;
-    }
-
     if (diagptr) {
       for (int j = rowptr[i]; j < extptr[i]; ++j) {
         if (colidx[j] == diagCol) {
           diagptr[i] = j;
           break;
         }
+      }
+
+      // when diagptr presents, sort lower and upper triangular part separately
+      for (int j = rowptr[i] + 1; j < diagptr[i]; ++j) {
+        int c = colidx[j];
+        double v = values[j];
+
+        int k = j - 1;
+        while (k >= rowptr[i] && colidx[k] > c) {
+          colidx[k + 1] = colidx[k];
+          values[k + 1] = values[k];
+          --k;
+        }
+
+        colidx[k + 1] = c;
+        values[k + 1] = v;
+      }
+
+      for (int j = diagptr[i] + 2; j < extptr[i]; ++j) {
+        int c = colidx[j];
+        double v = values[j];
+
+        int k = j - 1;
+        while (k >= diagptr[i] + 1 && colidx[k] > c) {
+          colidx[k + 1] = colidx[k];
+          values[k + 1] = values[k];
+          --k;
+        }
+
+        colidx[k + 1] = c;
+        values[k + 1] = v;
+      }
+    }
+    else {
+      for (int j = rowptr[i] + 1; j < extptr[i]; ++j) {
+        int c = colidx[j];
+        double v = values[j];
+
+        int k = j - 1;
+        while (k >= rowptr[i] && colidx[k] > c) {
+          colidx[k + 1] = colidx[k];
+          values[k + 1] = values[k];
+          --k;
+        }
+
+        colidx[k + 1] = c;
+        values[k + 1] = v;
       }
     }
   } // for each row
