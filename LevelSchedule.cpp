@@ -324,7 +324,7 @@ void findLevels_(
           int jEnd = extptr[pred];
           for (int j = jBegin; j < jEnd; ++j) {
             int succ = colidx[j] - BASE;
-            if (succ < 0 || succ >= m) continue; // for a "fat" matrices with halo
+            if (succ >= m) continue; // for a "fat" matrices with halo
             --nparents[succ];
             assert(nparents[succ] >= 0);
             if (nparents[succ] == 0) {
@@ -405,7 +405,7 @@ void findLevels_(
         int jEnd = extptr[pred];
         for (int j = jBegin; j < jEnd; ++j) {
           int succ = colidx[j] - BASE;
-          if (succ < 0 || succ >= m) continue; // for a "fat" matrices with halo
+          if (succ >= m) continue; // for a "fat" matrices with halo
           if (__sync_fetch_and_add(nparents + succ, -1) == 1) {
             *tailPtr = succ;
             *(rowPtr + 1) =
@@ -546,11 +546,7 @@ void findLevels_(
 
 #pragma omp for
   for (int i = 0; i < n; ++i) {
-    int cnt = 0;
-    for (int j = rowptr[i]; j < diagptr[i]; ++j) {
-      if (colidx[j] >= 0) ++cnt;
-    }
-    nparents[i] = cnt;
+    nparents[i] = diagptr[i] - rowptr[i];
     if (nparents[i] == 0) {
       *tailPtr = i;
       *(rowPtr + 1) = *rowPtr + extptr[i] - diagptr[i] - 1;
@@ -941,15 +937,8 @@ void constructTaskGraph_(
     int invSize = 0;
     for (int i1Perm = taskBoundaries[v1]; i1Perm < taskBoundaries[v1 + 1]; ++i1Perm) {
       int i1 = threadContToOrigPerm[i1Perm];
-
-      for (int j = rowptr[i1]; j < diagptr[i1]; ++j) {
-        if (colidx[j] - BASE >= 0 && colidx[j] - BASE < m) ++invSize;
-      }
-      ++invSize; // additional 1 for intra-thread dependency
-
-      for (int j = diagptr[i1] + 1; j < extptr[i1]; ++j) {
-        if (colidx[j] - BASE >= 0 && colidx[j] - BASE < m) ++size;
-      }
+      size += extptr[i1] - diagptr[i1] - 1;
+      invSize += diagptr[i1] - rowptr[i1] + 1; // additional 1 for intra-thread
     }
     taskAdjacency.rowptr[v1] = origRowPtrCnt;
     taskInvAdjacency.rowptr[v1] = origInvRowPtrCnt;
@@ -1052,7 +1041,6 @@ void constructTaskGraph_(
         int begin = diagptr[i1] + 1;
         int end = extptr[i1];
         for (int j = begin; j < end; ++j) {
-          if (colidx[j] - BASE < 0 || colidx[j] - BASE >= m) continue;
           int v = origRowIdToTaskId[colidx[j] - BASE];
           if (v < boundaryBegin || v >= boundaryEnd) {
             i2s[size] = v;
@@ -1389,7 +1377,7 @@ void constructTaskGraph_(
 
   printf(
     "average degree = %f\n",
-    (double)perThreadRowPtrSum[nthreads]/(levIndices.size() - 2)/nthreads);
+    (double)perThreadRowPtrSum[nthreads]/(schedule->levIndices.size() - 2)/nthreads);
   fflush(stdout);
 
   t = __rdtsc();
@@ -1736,7 +1724,7 @@ void constructTaskGraph_(
   }
   printf(
     "average degree after reduction = %f\n",
-    (double)numNewEdgesSum/(levIndices.size() - 2)/nthreads);
+    (double)numNewEdgesSum/(schedule->levIndices.size() - 2)/nthreads);
 #endif
 
   if (useMemoryPool) {
@@ -1770,7 +1758,7 @@ void constructTaskGraph_(
   printf("mergables = %f\n", (double)mergeables/threadBoundariesForward[nthreads]);*/
 
 #ifdef TRSOLVER_LOG
-  printf("parallelism = %f\n", (double)m/(levIndices.size() - 1));
+  printf("parallelism = %f\n", (double)m/(schedule->levIndices.size() - 1));
 #endif
 }
 
