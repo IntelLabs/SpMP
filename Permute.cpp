@@ -145,34 +145,61 @@ void permuteColsInPlace_(CSR *A, const int *perm)
       }
 
       // when diagptr presents, sort lower and upper triangular part separately
-      for (int j = rowptr[i] + 1; j < diagptr[i]; ++j) {
-        int c = colidx[j];
-        double v = values[j];
+      if (values) {
+        for (int j = rowptr[i] + 1; j < diagptr[i]; ++j) {
+          int c = colidx[j];
+          double v = values[j];
 
-        int k = j - 1;
-        while (k >= rowptr[i] && colidx[k] > c) {
-          colidx[k + 1] = colidx[k];
-          values[k + 1] = values[k];
-          --k;
+          int k = j - 1;
+          while (k >= rowptr[i] && colidx[k] > c) {
+            colidx[k + 1] = colidx[k];
+            values[k + 1] = values[k];
+            --k;
+          }
+
+          colidx[k + 1] = c;
+          values[k + 1] = v;
         }
 
-        colidx[k + 1] = c;
-        values[k + 1] = v;
+        for (int j = diagptr[i] + 2; j < extptr[i]; ++j) {
+          int c = colidx[j];
+          double v = values[j];
+
+          int k = j - 1;
+          while (k >= diagptr[i] + 1 && colidx[k] > c) {
+            colidx[k + 1] = colidx[k];
+            values[k + 1] = values[k];
+            --k;
+          }
+
+          colidx[k + 1] = c;
+          values[k + 1] = v;
+        }
       }
+      else {
+        for (int j = rowptr[i] + 1; j < diagptr[i]; ++j) {
+          int c = colidx[j];
 
-      for (int j = diagptr[i] + 2; j < extptr[i]; ++j) {
-        int c = colidx[j];
-        double v = values[j];
+          int k = j - 1;
+          while (k >= rowptr[i] && colidx[k] > c) {
+            colidx[k + 1] = colidx[k];
+            --k;
+          }
 
-        int k = j - 1;
-        while (k >= diagptr[i] + 1 && colidx[k] > c) {
-          colidx[k + 1] = colidx[k];
-          values[k + 1] = values[k];
-          --k;
+          colidx[k + 1] = c;
         }
 
-        colidx[k + 1] = c;
-        values[k + 1] = v;
+        for (int j = diagptr[i] + 2; j < extptr[i]; ++j) {
+          int c = colidx[j];
+
+          int k = j - 1;
+          while (k >= diagptr[i] + 1 && colidx[k] > c) {
+            colidx[k + 1] = colidx[k];
+            --k;
+          }
+
+          colidx[k + 1] = c;
+        }
       }
     }
     else {
