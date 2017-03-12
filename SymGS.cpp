@@ -43,20 +43,20 @@ void splitLU(CSR& A, CSR *L, CSR *U)
     getSimpleThreadPartition(&iBegin, &iEnd, A.m);
 
     // count # of nnz per row
-    int sum0 = 0, sum1 = 0;
+    int nnzL = 0, nnzU = 0;
     for (int i = iBegin; i < iEnd; ++i) {
-      L->rowptr[i] = sum0;
-      U->rowptr[i] = sum1;
+      L->rowptr[i] = nnzL;
+      U->rowptr[i] = nnzU;
 
       for (int j = A.rowptr[i]; j < extptr[i]; ++j) {
-        if (A.colidx[j] < i) sum0++;
-        if (A.colidx[j] > i) sum1++;
+        if (A.colidx[j] < i) nnzL++;
+        if (A.colidx[j] > i) nnzU++;
       } // for each element
-      sum1 += A.rowptr[i + 1] - extptr[i];
+      nnzU += A.rowptr[i + 1] - extptr[i];
     } // for each row
 
-    rowPtrPartialSum[0][tid + 1] = sum0;
-    rowPtrPartialSum[1][tid + 1] = sum1;
+    rowPtrPartialSum[0][tid + 1] = nnzL;
+    rowPtrPartialSum[1][tid + 1] = nnzU;
 
 #pragma omp barrier
 #pragma omp single
