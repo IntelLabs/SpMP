@@ -32,9 +32,9 @@ using namespace std;
 namespace SpMP
 {
 
-void CSR::permuteRowptr(CSR *ret, const int *reversePerm) const
+void CSR::permuteRowptr(CSR *ret, const int *inversePerm) const
 {
-  assert(isPerm(reversePerm, m));
+  assert(isPerm(inversePerm, m));
 
   int base = getBase();
 
@@ -48,7 +48,7 @@ void CSR::permuteRowptr(CSR *ret, const int *reversePerm) const
     ret->rowptr[iBegin] = 0;
     int i;
     for (i = iBegin; i < iEnd - 1; ++i) {
-      int row = reversePerm ? reversePerm[i] : i;
+      int row = inversePerm ? inversePerm[i] : i;
       int begin = rowptr[row], end = rowptr[row + 1];
       ret->rowptr[i + 1] = ret->rowptr[i] + end - begin;
       if (extptr) {
@@ -57,7 +57,7 @@ void CSR::permuteRowptr(CSR *ret, const int *reversePerm) const
     }
     int localNnz = 0;
     if (i < iEnd) {
-      int row = reversePerm ? reversePerm[i] : i;
+      int row = inversePerm ? inversePerm[i] : i;
       int begin = rowptr[row], end = rowptr[row + 1];
       localNnz = ret->rowptr[i] + end - begin;
       if (extptr) {
@@ -78,7 +78,7 @@ void CSR::permuteRowptr(CSR *ret, const int *reversePerm) const
   assert(ret->rowptr[m] == rowptr[m]);
 }
 
-CSR *CSR::permuteRowptr(const int *reversePerm) const
+CSR *CSR::permuteRowptr(const int *inversePerm) const
 {
   CSR *ret = new CSR();
 
@@ -106,7 +106,7 @@ CSR *CSR::permuteRowptr(const int *reversePerm) const
     assert(ret->extptr);
   }
   
-  permuteRowptr(ret, reversePerm);
+  permuteRowptr(ret, inversePerm);
 
   return ret;
 }
@@ -424,10 +424,10 @@ CSR *CSR::permute(const int *columnPerm, const int *rowInversePerm, bool sort /*
   return ret;
 }
 
-CSR *CSR::permuteRows(const int *reversePerm) const
+CSR *CSR::permuteRows(const int *inversePerm) const
 {
-  CSR *ret = permuteRowptr(reversePerm);
-  permuteRowsMain(ret, reversePerm);
+  CSR *ret = permuteRowptr(inversePerm);
+  permuteRowsMain(ret, inversePerm);
   return ret;
 }
 
