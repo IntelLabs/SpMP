@@ -56,7 +56,7 @@ $(LIBRARY): $(OBJS)
 all: clean
 	$(MAKE) $(LIBRARY)
 
-test: test/gs_test test/reordering_test test/trsv_test
+test: test/gs_test test/reordering_test test/trsv_test test/mtx2bin
 
 test/%: test/%.o $(LIBRARY)
 	$(CXX) $(CXXFLAGS) -o $@ $^
