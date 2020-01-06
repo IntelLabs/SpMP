@@ -61,7 +61,9 @@ Permuted bandwidth 330214
 SpMV BW   41.32 gbps
 
  */
- 
+
+#include <cstring>
+
 #include <omp.h>
 #ifdef MKL
 #include <mkl.h>
@@ -82,6 +84,13 @@ int main(int argc, char **argv)
 {
   if (argc < 2) {
     fprintf(stderr, "Usage: reordering_test matrix_in_matrix_market_format\n");
+    return -1;
+  }
+  int l = strlen(argv[1]);
+  if (l > 4 && !strcmp(argv[1] + l - 4, ".bin")) {
+    fprintf(
+      stderr,
+      "Do not use .bin format because forcing symmetry for .bin is not supported\n");
     return -1;
   }
 

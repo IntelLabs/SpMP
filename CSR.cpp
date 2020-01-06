@@ -111,6 +111,7 @@ CSR::CSR(const char *fileName, int base /*=0*/, bool forceSymmetric /*=false*/, 
     generate3D27PtLaplacian(this, m, base);
   }
   else if (l > 4 && !strcmp(fileName + l - 4, ".bin")) {
+    assert(!forceSymmetric);
     loadBin(fileName, base);
   }
   else {
@@ -223,7 +224,7 @@ bool CSR::isSymmetric(bool checkValues, bool printFirstNonSymmetry) const
               hasPair = true;
               if (checkValues && values[j] != values[k]) {
                 printf(
-                  "assymmetric (%d, %d) = %g, (%d, %d) = %g\n", 
+                  "assymmetric (%d, %d) = %g, (%d, %d) = %g\n",
                   i + 1, c + 1, values[j], c + 1, i + 1, values[k]);
                 return false;
               }
@@ -248,7 +249,7 @@ bool CSR::hasZeroDiag() const
 {
   int base = getBase();
   volatile bool hasZeroDiag = false;
-  
+
 #pragma omp parallel
   {
     int iBegin, iEnd;
@@ -291,7 +292,7 @@ void CSR::storeMatrixMarket(const char *fileName) const
 
   // print matrix size and nonzeros.
   fprintf(fp, "%d %d %d\n", m, n, rowptr[m] - base);
-  
+
   // print values
   for (int i = 0; i < m; ++i) {
     for (int j = rowptr[i] - base; j < rowptr[i + 1] - base; ++j) {
@@ -307,35 +308,35 @@ static const int MAT_FILE_CLASSID = 1211216;
 void CSR::loadBin(const char *file_name, int base /*=0*/)
 {
   dealloc();
- 
+
   FILE *fp = fopen(file_name, "r");
   if (!fp) {
     fprintf(stderr, "Failed to open %s\n", file_name);
     return;
   }
- 
+
   int id;
   fread(&id, sizeof(id), 1, fp);
   if (MAT_FILE_CLASSID != id) {
     fprintf(stderr, "Wrong file ID (%d)\n", id);
   }
- 
+
   fread(&m, sizeof(m), 1, fp);
   fread(&n, sizeof(n), 1, fp);
   int nnz;
   fread(&nnz, sizeof(nnz), 1, fp);
- 
+
   alloc(m, nnz);
- 
+
   fread(rowptr + 1, sizeof(rowptr[0]), m, fp);
   rowptr[0] = 0;
   for (int i = 1; i < m; ++i) {
     rowptr[i + 1] += rowptr[i];
   }
- 
+
   fread(colidx, sizeof(colidx[0]), nnz, fp);
   fread(values, sizeof(values[0]), nnz, fp);
- 
+
 #pragma omp parallel for
   for (int i = 0; i < m; ++i) {
     for (int j = rowptr[i]; j < rowptr[i + 1]; ++j) {
@@ -346,7 +347,7 @@ void CSR::loadBin(const char *file_name, int base /*=0*/)
       }
     }
   }
- 
+
   fclose(fp);
 
   if (1 == base) {
@@ -622,7 +623,7 @@ CSR *CSR::transpose() const
   } // omp parallel
 
   bucket[n + base] = nnz + base;
-  AT->rowptr = bucket + base; 
+  AT->rowptr = bucket + base;
 
   return AT;
 }
