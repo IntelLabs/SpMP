@@ -697,7 +697,7 @@ void CSR::getRCMPermutation(int *perm, int *inversePerm, bool pseudoDiameterSour
 
   int numOfComponents;
   int *compToRoot, *compSizes, *compSizePrefixSum;
-  int *nodesSortedByComp;
+  int *nodesSortedByComp=NULL;
 
   double timeConnectedComponents = -omp_get_wtime();
   findConnectedComponents(
@@ -944,6 +944,11 @@ void CSR::getRCMPermutation(int *perm, int *inversePerm, bool pseudoDiameterSour
   delete[] children_array;
   delete[] write_offset;
   delete[] prefixSum_array;
+
+  if(nodesSortedByComp)
+  {
+      delete[] nodesSortedByComp;
+  }
 
 #if 0
   printf("num of connected components = %d (singleton = %d, twin = %d, large (>=%d) = %d)\n", numOfComponents, singletonCnt, twinCnt, PAR_THR, largeCompCnt);

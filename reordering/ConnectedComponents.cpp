@@ -323,6 +323,8 @@ void findConnectedComponents_(
 
   delete[] rootToComp;
   if (nodesToFind) delete[] nodesToFind;
+
+  delete[] p;
 }
 
 void findConnectedComponents(
